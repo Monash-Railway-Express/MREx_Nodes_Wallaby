@@ -84,6 +84,7 @@ const float WHEEL_CIRCUMFERENCE_M = WHEEL_DIAMETER_M*3.14159f;
 #define DAC_MAX              1023
 #define REGEN_BRAKE_THRESHOLD  100   // Minimum regen brake value to activate
 #define LOOP_INTERVAL_MS      10   // Control loop period in ms
+#define SPEED_WINDOW_SAMPLES  20   // Loops averaged for reported speed (20 x 10ms = 200ms, ~0.08 km/h resolution)
 #define MAX_SPEED_KMH  15.0f   // Hard speed cap — throttle cut above this speed (km/h)
 
 // --- Speed Thresholds ---

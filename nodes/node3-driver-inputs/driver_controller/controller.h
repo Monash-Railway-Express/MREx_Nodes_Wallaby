@@ -53,6 +53,9 @@ void InitBuffer(ADCBuffer* buf, int pin);
 #define CHALLENGE_MODE_PIN  GPIO_NUM_3
 #define OP_MODE_PIN         GPIO_NUM_4
 
+// Speed at which the Nextion speed bar reads 100% (km/h)
+#define SPEED_BAR_FULL_SCALE_KMH  15.0f
+
 // Nextion UART pins
 #define NEXTION_TX_PIN  GPIO_NUM_18
 #define NEXTION_RX_PIN  GPIO_NUM_17

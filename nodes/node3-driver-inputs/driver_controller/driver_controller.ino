@@ -79,7 +79,7 @@ uint32_t od_power            = 0;  // 0x2000:03 — W direct
 uint32_t od_recovered_energy = 0;  // 0x2000:04 — J direct
 
 // From Motor node (Node 1) via RPDO1 (COB-ID 0x181)
-uint32_t od_true_speed       = 0;  // 0x606C:00 — raw integer km/h (no scaling)
+uint32_t od_true_speed       = 0;  // 0x606C:00 — km/h x10 (divide by 10)
 uint32_t od_tractive_effort  = 0;  // 0x606E:00 — > 0 means tractive effort applied
 
 // From Lights/Sensors node (Node 4) via RPDO3 (COB-ID 0x184)
@@ -249,14 +249,14 @@ String getLocationText(uint8_t counter) {
  */
 void updateNextion() {
 
-  // ── SPEED — x10 scaled, clamp for display only
-  float speedF = constrain(float(od_true_speed)/10, 0.0, 15.0);
+  // ── SPEED — x10 scaled; readout uncapped, bar clamped to full scale
+  float speedF = float(od_true_speed)/10;
   int speedInt = (int)(od_true_speed);  // for cache comparison
   if (speedInt != prevSpeed) {
-    char buf[10];
+    char buf[16];  // fits full uint32/10 range
     dtostrf(speedF, 4, 1, buf);
     sendText("t_speed", String(buf) + " km/h");
-    sendProgressBar("j_speed", map(speedInt/10, 0, 15, 0, 100));
+    sendProgressBar("j_speed", constrain((int)(speedF * 100.0f / SPEED_BAR_FULL_SCALE_KMH), 0, 100));
     prevSpeed = speedInt;
   }
 

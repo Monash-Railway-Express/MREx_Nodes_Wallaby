@@ -292,9 +292,31 @@ void OperationalMode() {
     // Accumulate total pulses for distance tracking
     total_pulse_accum += (int32_t)pulse_count;              // adds value to accumulated pulses
 
+    // Rolling window for reported speed. A single 10ms loop only resolves one
+    // encoder pulse = ~1.56 km/h, so averaging over a longer window is needed
+    // for a usable display reading.
+    static int16_t  win_pulses[SPEED_WINDOW_SAMPLES] = {0};
+    static uint16_t win_ms[SPEED_WINDOW_SAMPLES]     = {0};
+    static uint8_t  win_idx       = 0;
+    static int32_t  win_pulse_sum = 0;
+    static uint32_t win_ms_sum    = 0;
+
+    uint16_t loop_ms = (uint16_t)(current_millis - previous_millis);
+    win_pulse_sum += pulse_count - win_pulses[win_idx];
+    win_ms_sum    += loop_ms     - win_ms[win_idx];
+    win_pulses[win_idx] = pulse_count;
+    win_ms[win_idx]     = loop_ms;
+    win_idx = (win_idx + 1) % SPEED_WINDOW_SAMPLES;
+
     float speed_kmh = ReadSpeedKMH(previous_millis);        // clears counter here
     previous_millis = current_millis;
-    od_true_speed   = (uint32_t)(speed_kmh*10);
+
+    float reported_kmh = 0.0f;
+    if (win_ms_sum > 0) {
+        float meters = (win_pulse_sum / PULSES_PER_REV) * WHEEL_CIRCUMFERENCE_M;
+        reported_kmh = (meters / (win_ms_sum / 1000.0f)) * 3.6f;
+    }
+    od_true_speed   = (uint32_t)(reported_kmh*10 + 0.5f);   // x10 scaled
 
 
     // Detect mode transitions
