@@ -8,10 +8,11 @@
  *
  * @author Chiara Gillam
  * @author Sean Larkin
+ * @author Nhan Nguyen
  *
- * @date 13/03/2026
+ * @date 17/10/2026
  *
- * @version 2.0.0
+ * @version 2.1.1
  *
  * @organisation MREX
  *
@@ -21,22 +22,10 @@
 #ifndef MOTOR_PCB_H
 #define MOTOR_PCB_H
 
+#include "../../../shared/MREx.h"
+uint8_t NODE_ID = MOTOR_ID;
+
 #include <stdint.h>
-
-// --- Node ID ---
-uint8_t NODE_ID = 1;
-
-//Defining Node ID's
-#define MOTOR_ID 0x01
-#define BRAKES_ID 0x02
-#define DRIVER_ID 0x03
-#define LIGHTS_ID 0x04
-#define AUDIO_ID 0x05
-#define AUTOSTOP_ID 0x06
-#define BATTERY_ID 0x07
-#define LOGGER_ID 0x08
-#define LCD_ID 0x09
-
 
 // --- CAN Pins ---
 #define TX_GPIO_NUM GPIO_NUM_14
@@ -52,7 +41,7 @@ uint8_t NODE_ID = 1;
 
 // --- GPIO Pins ---
 #define REVERSING_SWITCH_MC  GPIO_NUM_5
-#define REGEN_BRAKE_SWITCH         GPIO_NUM_10
+#define REGEN_BRAKE_SWITCH   GPIO_NUM_10
 #define FORWARD_SWITCH       GPIO_NUM_4 
 #define MOTOR1_GREEN_LED     GPIO_NUM_7
 #define MOTOR2_GREEN_LED     GPIO_NUM_15
@@ -91,33 +80,12 @@ const float WHEEL_CIRCUMFERENCE_M = WHEEL_DIAMETER_M*3.14159f;
 #define SERVICE_BRAKE_SPEED_KMH  2.0f   // Apply service brake below this speed (km/h)
 #define AUTO_STOP_SPEED_KMH      5.0f   // Target stop speed for AutoStop challenge (km/h)
 
-// --- Challenge Mode Values ---
-#define CHALLENGE_THROTTLE        1
-#define CHALLENGE_SPEED_CONTROL   2
-#define CHALLENGE_AUTO_STOP       3
-#define CHALLENGE_ENERGY_RECOVERY 4
-#define CHALLENGE_TRACTION        5
-
 //challenge variable
 #define AUTO_STOP_DISTANCE_M  21.0f   // Target stop distance for AutoStop challenge (m)
 
 // pin values
 #define REGEN_ON HIGH
 #define REGEN_OFF LOW
-
-// --- Operating Modes ---
-enum OperatingMode : uint8_t {
-    MODE_STOPPED        = 0x02,
-    MODE_PREOP          = 0x80,
-    MODE_OPERATIONAL    = 0x01
-};
-
-// --- Direction Mode ---
-enum DirectionMode : uint8_t {
-    REVERSE_MODE        = 1,
-    NEUTRAL_MODE        = 2,
-    FORWARD_MODE        = 3
-};
 
 // --- Function Prototypes ---
 void CommonConfig();

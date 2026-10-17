@@ -20,6 +20,12 @@
 #include <Arduino.h>
 #include <CAN_MREx.h>
 
+// CAN Function Codes
+#define TPDO1_FUNCODE 0x180
+#define TPDO2_FUNCODE 0x280
+#define TPDO3_FUNCODE 0x380
+#define TPDO4_FUNCODE 0x480
+
 // Node IDs
 #define MOTOR_ID 0x01
 #define BRAKES_ID 0x02
@@ -32,7 +38,7 @@
 #define LCD_ID 0x09
 
 // Object Dictionaries
-uint16_t od_regen_brake;
+uint16_t od_regen_brake = 0;
 #define OD_REGEN_BRAKE_INDEX 0x3012
 #define OD_REGEN_BRAKE_SUBINDEX 0x00
 
@@ -41,7 +47,7 @@ enum ODServiceBrake : uint8_t {
     BRAKING             = 0
 };
 
-uint8_t od_service_brake_mc;
+uint8_t od_service_brake_mc = 1;
 #define OD_SERVICE_BRAKE_MC_INDEX 0x3012
 #define OD_SERVICE_BRAKE_MC_SUBINDEX 0x01
 #define ODServiceBrakeMC ODServiceBrake
@@ -55,11 +61,11 @@ uint8_t od_service_brake_dc;
 #define OD_BRAKE_THRESHOLD_INDEX 0x3012
 #define OD_BRAKE_THRESHOLD_SUBINDEX 0x03
 
-uint16_t od_motor_command;
+uint16_t od_motor_command = 0;
 #define OD_MOTOR_COMMAND_INDEX 0x606A
 #define OD_MOTOR_COMMAND_SUBINDEX 0x00
 
-uint32_t od_true_speed;
+uint32_t od_true_speed = 0;
 #define OD_TRUE_SPEED_INDEX 0x606C
 #define OD_TRUE_SPEED_SUBINDEX 0x00
 
@@ -135,7 +141,7 @@ enum ODOperatingMode : uint8_t {
     MODE_OPERATIONAL    = 0x01
 };
 
-uint8_t od_direction_mode;
+uint8_t od_direction_mode = 0;
 #define OD_DIRECTION_MODE_INDEX 0x6060
 #define OD_DIRECTION_MODE_SUBINDEX 0x00
 enum ODDirectionMode : uint8_t {
@@ -144,11 +150,11 @@ enum ODDirectionMode : uint8_t {
     FORWARD_MODE        = 3
 };
 
-uint8_t od_condition_mode;
+uint8_t od_condition_mode = 0;
 #define OD_CONDITION_MODE_INDEX 0x6061
 #define OD_CONDITION_MODE_SUBINDEX 0x00
 
-uint8_t od_challenge_mode;
+uint8_t od_challenge_mode = 1;
 #define OD_CHALLENGE_MODE_INDEX 0x6062
 #define OD_CHALLENGE_MODE_SUBINDEX 0x00
 enum ODChallengeMode : uint8_t {
@@ -175,7 +181,7 @@ uint16_t od_temperature_rear;
 #define OD_TEMPERATURE_REAR_INDEX 0x1004
 #define OD_TEMPERATURE_REAR_SUBINDEX 0x01
 
-uint8_t od_autostop_detection;
+uint8_t od_autostop_detection = 0;
 #define OD_AUTOSTOP_DETECTION_INDEX 0x1050
 #define OD_AUTOSTOP_DETECTION_SUBINDEX 0x00
 
@@ -191,24 +197,43 @@ uint16_t od_soc;
 #define OD_SOC_INDEX 0x2000
 #define OD_SOC_SUBINDEX 0x02
 
-uint32_t od_power;
+uint32_t od_power = 0;
 #define OD_POWER_INDEX 0x2000
 #define OD_POWER_SUBINDEX 0x03
 
-uint32_t od_recovered_energy;
+uint32_t od_recovered_energy = 0;
 #define OD_RECOVERED_ENERGY_INDEX 0x2000
 #define OD_RECOVERED_ENERGY_SUBINDEX 0x04
 
+uint32_t od_cumulative_energy = 0;
+#define OD_CUMULATIVE_ENERGY_INDEX 0x2000
+#define OD_CUMULATIVE_ENERGY_SUBINDEX 0x05
+
 // PDO Maps
-#define PDO_TS_COB_ID 0x180 + MOTOR_ID
+#define PDO_TS_COB_ID TPDO1_FUNCODE + MOTOR_ID
 PdoMapEntry PDO_TS_MAP[] = {
     {OD_TRUE_SPEED_INDEX, OD_TRUE_SPEED_SUBINDEX, 8*sizeof(od_true_speed)}
 };
+#define PDO_TS_COUNT 1
 
-#define PDO_RGB_MTCM_COB_ID 0x180 + DRIVER_ID
+#define PDO_RGB_MTCM_COB_ID TPDO1_FUNCODE + DRIVER_ID
 PdoMapEntry PDO_RGB_MTCM_MAP[] = {
     {OD_REGEN_BRAKE_INDEX, OD_REGEN_BRAKE_SUBINDEX, 8*sizeof(od_regen_brake)},
     {OD_MOTOR_COMMAND_INDEX, OD_MOTOR_COMMAND_SUBINDEX, 8*sizeof(od_motor_command)}
 };
+#define PDO_RGB_MTCM_COUNT 2
+
+#define PDO_CE_COB_ID TPDO3_FUNCODE + BATTERY_ID
+PdoMapEntry PDO_CE_MAP[] = {
+    {OD_CUMULATIVE_ENERGY_INDEX, OD_CUMULATIVE_ENERGY_SUBINDEX, 8*sizeof(od_cumulative_energy)}
+};
+#define PDO_CE_COUNT 1
+
+#define PDO_PWR_RE_COB_ID TPDO2_FUNCODE + BATTERY_ID
+PdoMapEntry PDO_PWR_RE_MAP[] = {
+    {OD_POWER_INDEX, OD_POWER_SUBINDEX, 8*sizeof(od_power)},
+    {OD_RECOVERED_ENERGY_INDEX, OD_RECOVERED_ENERGY_SUBINDEX, 8*sizeof(od_recovered_energy)}
+};
+#define PDO_PWR_RE_COUNT 2
 
 #endif // MREX_H

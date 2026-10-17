@@ -10,9 +10,9 @@
  * @author Sean Larkin
  * @author Nhan Nguyen
  *
- * @date 28/04/2026
+ * @date 17/10/2026
  *
- * @version 2.1.0
+ * @version 2.1.1
  *
  * @organisation MREX
  *
@@ -20,7 +20,7 @@
  * @see CHANGELOG.md
  */
 
-#include "CAN_MREx.h"
+#include <CAN_MREx.h>
 #include <Arduino.h>
 #include <Wire.h>
 #include <Preferences.h>
@@ -29,49 +29,11 @@
 #include "../../../shared/DualSerial/DualSerial.cpp"
 
 
-
-// =============================================================================
-// OD Variable Definitions
-// =============================================================================
-
-
-
-// OD 0x606C:00 – Actual vehicle speed in km/h (0–UINT32_MAX). RW. Mapped to TPDO0.
-uint32_t od_true_speed = 0;
-
-// OD 0x3012:00 – Regen brake request (0–1023). RW. Mapped to RPDO0.
-uint16_t od_regen_brake = 0;
-
-// OD 0x3012:01 – Service brake active flag (1 = "Braking", 0 = "Not Braking"). RW. Mapped to SDO.
-uint8_t od_service_brake_mc = 1;
-
-// OD 0x606A:00 – Raw motor command (0–255). RW. Mapped to RPDO0.
-uint16_t od_motor_command = 0;
-
-// OD 0x6061:00 – Condition, 1-5 1 being best track conditions 5 being worst track conditions (Not implemented yet)
-uint8_t od_condition_mode = 0;
-
-// OD 0x6060:00 – Direction mode mirror. RW. Mapped to RPDO0.
-uint8_t od_direction_mode = 0;
-
-// OD 0x6062:00 – Challenge mode selector (1=Normal, 2=Speed, 3=AutoStop,
-//                4=EnergyRecovery, 5=Traction). RW. Mapped to RPDO0.
-uint8_t od_challenge_mode = 1;
-uint8_t prev_challenge_mode = 0;
-
-// OD 0x2000:04 – Recovered energy from battery node (Wh). Read-only. Mapped to RPDO1.
-uint32_t od_recovered_energy = 0;
-
-// OD 0x1050:00 - Autostop lineside marker detection. 0-not detected, 1-detected
-uint8_t od_autostop_detection = 0;
-
-uint32_t od_power = 0;
-
-int32_t od_cumulative_energy = 0;
-
 // =============================================================================
 // Global Variables
 // =============================================================================
+
+uint8_t prev_challenge_mode = 0; // od_challenge_mode = 1 on start
 
 bool reset_energy_recovery = false; // this is to reset the energy recovery challenge
 
@@ -143,72 +105,61 @@ void setup() {
     pinMode(REGEN_BRAKE_SWITCH, OUTPUT);
 
     // --- Register OD entries ---
-    registerODEntry(0x606C, 0x00, 2, sizeof(od_true_speed), &od_true_speed);                // TPDO - 32bit
-    registerODEntry(0x3012, 0x00, 2, sizeof(od_regen_brake), &od_regen_brake);              // RPDO - 16bit
-    registerODEntry(0x3012, 0x01, 2, sizeof(od_service_brake_mc), &od_service_brake_mc);    // SDO - 8bit
-    registerODEntry(0x606A, 0x00, 2, sizeof(od_motor_command), &od_motor_command);          // RPDO - 16bit
-    registerODEntry(0x6061, 0x00, 2, sizeof(od_condition_mode), &od_condition_mode);        // SDO - 8bit
-    registerODEntry(0x6060, 0x00, 2, sizeof(od_direction_mode), &od_direction_mode);        // SDO - 8bit
-    registerODEntry(0x6062, 0x00, 2, sizeof(od_challenge_mode), &od_challenge_mode);        // SDO - 8bit
-    registerODEntry(0x2000, 0x03, 2, sizeof(od_power), &od_power);    // RPDO - 32bit
-    registerODEntry(0x2000, 0x04, 2, sizeof(od_recovered_energy), &od_recovered_energy);    // RPDO - 32bit
-    registerODEntry(0x1050, 0x00, 2, sizeof(od_autostop_detection), &od_autostop_detection);    // SDO - 8bit
-    registerODEntry(0x2000, 0x05, 2, sizeof(od_cumulative_energy), &od_cumulative_energy);   
+    registerODEntry(OD_TRUE_SPEED_INDEX,            OD_TRUE_SPEED_SUBINDEX,         2, sizeof(od_true_speed),           &od_true_speed);                // TPDO - 32bit
+    registerODEntry(OD_REGEN_BRAKE_INDEX,           OD_REGEN_BRAKE_SUBINDEX,        2, sizeof(od_regen_brake),          &od_regen_brake);              // RPDO - 16bit
+    registerODEntry(OD_SERVICE_BRAKE_MC_INDEX,      OD_SERVICE_BRAKE_MC_SUBINDEX,   2, sizeof(od_service_brake_mc),     &od_service_brake_mc);    // SDO - 8bit
+    registerODEntry(OD_MOTOR_COMMAND_INDEX,         OD_MOTOR_COMMAND_SUBINDEX,      2, sizeof(od_motor_command),        &od_motor_command);          // RPDO - 16bit
+    registerODEntry(OD_CONDITION_MODE_INDEX,        OD_CONDITION_MODE_SUBINDEX,     2, sizeof(od_condition_mode),       &od_condition_mode);        // SDO - 8bit
+    registerODEntry(OD_DIRECTION_MODE_INDEX,        OD_DIRECTION_MODE_SUBINDEX,     2, sizeof(od_direction_mode),       &od_direction_mode);        // SDO - 8bit
+    registerODEntry(OD_CHALLENGE_MODE_INDEX,        OD_CHALLENGE_MODE_SUBINDEX,     2, sizeof(od_challenge_mode),       &od_challenge_mode);        // SDO - 8bit
+    registerODEntry(OD_POWER_INDEX,                 OD_POWER_SUBINDEX,              2, sizeof(od_power),                &od_power);    // RPDO - 32bit
+    registerODEntry(OD_RECOVERED_ENERGY_INDEX,      OD_RECOVERED_ENERGY_SUBINDEX,   2, sizeof(od_recovered_energy),     &od_recovered_energy);    // RPDO - 32bit
+    registerODEntry(OD_AUTOSTOP_DETECTION_INDEX,    OD_AUTOSTOP_DETECTION_SUBINDEX, 2, sizeof(od_autostop_detection),   &od_autostop_detection);    // SDO - 8bit
+    registerODEntry(OD_CUMULATIVE_ENERGY_INDEX,     OD_CUMULATIVE_ENERGY_SUBINDEX,  2, sizeof(od_cumulative_energy),    &od_cumulative_energy);   
     
     
     // When adding a new pair, ensure to update numFloatPairs
     // Assign values here rather than statically above as floats do not initialise properly otherwise
-    floatPairs[0] = {"od_kp_1", 0.016442f, 0x60F6, 0x00};
-    floatPairs[1] = {"od_ki_1", 1.7177f, 0x60F6, 0x01};
-    floatPairs[2] = {"od_kd_1", 0.3f, 0x60F6, 0x02};
-    floatPairs[3] = {"od_kp_2", 0.4f, 0x60F6, 0x03};
-    floatPairs[4] = {"od_ki_2", 0.5f, 0x60F6, 0x04};
-    floatPairs[5] = {"od_kd_2", 0.6f, 0x60F6, 0x05};
-    floatPairs[6] = {"od_kp_3", 0.7f, 0x60F6, 0x06};
-    floatPairs[7] = {"od_ki_3", 0.8f, 0x60F6, 0x07};
-    floatPairs[8] = {"od_kd_3", 0.9f, 0x60F6, 0x08};
-    floatPairs[9] = {"od_kp_4", 0.0f, 0x60F6, 0x09};
-    floatPairs[10] = {"od_ki_4", 0.1f, 0x60F6, 0x0A};
-    floatPairs[11] = {"od_kd_4", 0.2f, 0x60F6, 0x0B};
-    floatPairs[12] = {"od_kp_5", 0.3f, 0x60F6, 0x0C};
-    floatPairs[13] = {"od_ki_5", 0.4f, 0x60F6, 0x0D};
-    floatPairs[14] = {"od_kd_5", 0.5f, 0x60F6, 0x0E};
+    floatPairs[0] = {"od_kp_1", 0.016442f, OD_KP_1_INDEX, OD_KP_1_SUBINDEX};
+    floatPairs[1] = {"od_ki_1", 1.7177f, OD_KI_1_INDEX, OD_KI_1_SUBINDEX};
+    floatPairs[2] = {"od_kd_1", 0.3f, OD_KD_1_INDEX, OD_KD_1_SUBINDEX};
+    floatPairs[3] = {"od_kp_2", 0.4f, OD_KP_2_INDEX, OD_KP_2_SUBINDEX};
+    floatPairs[4] = {"od_ki_2", 0.5f, OD_KI_2_INDEX, OD_KI_2_SUBINDEX};
+    floatPairs[5] = {"od_kd_2", 0.6f, OD_KD_2_INDEX, OD_KD_2_SUBINDEX};
+    floatPairs[6] = {"od_kp_3", 0.7f, OD_KP_3_INDEX, OD_KP_3_SUBINDEX};
+    floatPairs[7] = {"od_ki_3", 0.8f, OD_KI_3_INDEX, OD_KI_3_SUBINDEX};
+    floatPairs[8] = {"od_kd_3", 0.9f, OD_KD_3_INDEX, OD_KD_3_SUBINDEX};
+    floatPairs[9] = {"od_kp_4", 0.0f, OD_KP_4_INDEX, OD_KP_4_SUBINDEX};
+    floatPairs[10] = {"od_ki_4", 0.1f, OD_KI_4_INDEX, OD_KI_4_SUBINDEX};
+    floatPairs[11] = {"od_kd_4", 0.2f, OD_KD_4_INDEX, OD_KD_4_SUBINDEX};
+    floatPairs[12] = {"od_kp_5", 0.3f, OD_KP_5_INDEX, OD_KP_5_SUBINDEX};
+    floatPairs[13] = {"od_ki_5", 0.4f, OD_KI_5_INDEX, OD_KI_5_SUBINDEX};
+    floatPairs[14] = {"od_kd_5", 0.5f, OD_KD_5_INDEX, OD_KD_5_SUBINDEX};
     for (int i = 0; i < numFloatPairs; i++) {
         // Assigning floatPairs[i] to a variable first does not work to update floatPairs[i].value on SDO writes
         registerODEntry(floatPairs[i].index, floatPairs[i].subindex, 2, sizeof(floatPairs[i].value), &(floatPairs[i].value)); // SDO
     }
 
     // --- Register TPDOs ---
-    configureTPDO(0, 0x180 + MOTOR_ID, 255, 100, 100);
-    PdoMapEntry tpdo_entries[] = {
-        {0x606C, 0x00, 32}  // od_true_speed
-    };
-    mapTPDO(0, tpdo_entries, 1);
+    // od_true_speed
+    configureTPDO(0, PDO_TS_COB_ID, 255, 100, 100);
+    mapTPDO(0, PDO_TS_MAP, PDO_TS_COUNT);
 
     // --- Register RPDOs ---
-    configureRPDO(0, 0x180 + DRIVER_ID, 255, 0);
-    PdoMapEntry rpdo_entries[] = {
-        {0x3012, 0x00, 16},  // od_regen_brake
-        {0x606A, 0x00, 16}   // od_motor_command
-    };
-    mapRPDO(0, rpdo_entries, 2);
+    // od_regen_brake 
+    configureRPDO(0, PDO_RGB_MTCM_COB_ID, 255, 0);
+    mapRPDO(0, PDO_RGB_MTCM_MAP, PDO_RGB_MTCM_COUNT);
 
-    configureRPDO(2, 0x380 + BATTERY_ID, 255, 0);
-    PdoMapEntry rpdo2_entries[] = {
-        {0x2000, 0x05, 32},  // cumulative_energy
-    };
-    mapRPDO(2, rpdo2_entries, 1);
+    // od_cumulative_energy
+    configureRPDO(2, PDO_CE_COB_ID, 255, 0);
+    mapRPDO(2, PDO_CE_MAP, PDO_CE_COUNT);
 
     /**
     * TODO
     */
-    configureRPDO(1, 0x280 + BATTERY_ID, 255, 0);
-
-    PdoMapEntry rpdo1_entries[] = {
-        {0x2000, 0x03, 32},  // power_can       — aligns bytes 0-3
-        {0x2000, 0x04, 32}   // recovered_energy_can — now correctly at bytes 4-7
-    };
-    mapRPDO(1, rpdo1_entries, 2);
+    //
+    configureRPDO(1, PDO_PWR_RE_COB_ID, 255, 0);
+    mapRPDO(1, PDO_PWR_RE_MAP, PDO_PWR_RE_COUNT);
 }
 
 
@@ -567,7 +518,7 @@ void AutoStopChallenge(float speed_kmh, int32_t pulse_accum) {
             WriteDAC(REGEN_CHANNEL, DAC_MAX);
             if (od_service_brake_mc == 1){
                 od_service_brake_mc = 0;
-                executeSDOWrite(NODE_ID, BRAKES_ID, 0x3012, 0x01, sizeof(od_service_brake_mc), &od_service_brake_mc);
+                executeSDOWrite(NODE_ID, BRAKES_ID, OD_SERVICE_BRAKE_MC_INDEX, OD_SERVICE_BRAKE_MC_SUBINDEX, sizeof(od_service_brake_mc), &od_service_brake_mc);
             }
 
             od_autostop_detection = 0;
@@ -743,7 +694,7 @@ void SetupPCNT() {
  */
 void SetServiceBrake(bool engaged) {
     od_service_brake_mc = engaged ? 1 : 0;   // 1 = braking, 0 = not braking
-    executeSDOWrite(NODE_ID, BRAKES_ID, 0x3012, 0x01, sizeof(od_service_brake_mc), &od_service_brake_mc);
+    executeSDOWrite(NODE_ID, BRAKES_ID, OD_SERVICE_BRAKE_MC_INDEX, OD_SERVICE_BRAKE_MC_SUBINDEX, sizeof(od_service_brake_mc), &od_service_brake_mc);
     // // ^ check your CAN_MREx signature — adjust args to match
 }
 
