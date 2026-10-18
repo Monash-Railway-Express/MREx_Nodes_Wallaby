@@ -14,9 +14,10 @@
  * @author Kang Yee
  * @author Nicholas Rowe
  * @author Aditya Dinesh Kumar
+ * @author Nhan Nguyen
  *
  * @date Created: 05/08/2025
- * @version 1.5.0
+ * @version 1.5.1
  * @organisation MREX
  *
  * @changes v1.5.0
@@ -35,13 +36,6 @@
  *   - Preserved safety check: cannot jump from STOPPED to OPERATIONAL directly
  *   - Preserved major EMCY check in loop blocking op mode changes
 */
-
-// ═══════════════════════════════════════════════════════════════
-// OD DEFINITIONS — DRIVER CONTROLS (LOCAL)
-// ═══════════════════════════════════════════════════════════════
-
-// OD 0x3012:02 - Service brake (0=not braking, 1=braking).
-od_service_brake_dc = BRAKE_APPLIED;
 
 // ═══════════════════════════════════════════════════════════════
 // TIMING + ADC BUFFERS
@@ -331,9 +325,9 @@ void updateNextion() {
   }
 
   // ── TEMPERATURE (front sensor) ──────────────────────────────
-  if (od_temp_front != prevTempFront) {
-    sendText("t_temp", String(od_temp_front) + " C");
-    prevTempFront = od_temp_front;
+  if (od_temperature_front != prevTempFront) {
+    sendText("t_temp", String(od_temperature_front) + " C");
+    prevTempFront = od_temperature_front;
   }
 
   // ── TRACTIVE EFFORT PILL ────────────────────────────────────
@@ -422,6 +416,13 @@ void updateNextion() {
 // ═══════════════════════════════════════════════════════════════
 
 void setup() {
+  // ═══════════════════════════════════════════════════════════════
+  // OD DEFINITIONS — DRIVER CONTROLS (LOCAL)
+  // ═══════════════════════════════════════════════════════════════
+
+  // OD 0x3012:02 - Service brake (0=not braking, 1=braking).
+  od_service_brake_dc = BRAKE_APPLIED;
+
   Serial.begin(115200);
   delay(1000);
   Serial.println("Serial Coms started at 115200 baud");

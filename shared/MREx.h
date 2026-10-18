@@ -51,15 +51,15 @@ enum ODServiceBrake : uint8_t {
     BRAKING             = 0
 };
 
+#define ODServiceBrakeMC ODServiceBrake
 uint8_t od_service_brake_mc = 1;
 #define OD_SERVICE_BRAKE_MC_INDEX 0x3012
 #define OD_SERVICE_BRAKE_MC_SUBINDEX 0x01
-#define ODServiceBrakeMC ODServiceBrake
 
+#define ODServiceBrakeDC ODServiceBrake
 uint8_t od_service_brake_dc = 0;
 #define OD_SERVICE_BRAKE_DC_INDEX 0x3012
 #define OD_SERVICE_BRAKE_DC_SUBINDEX 0x02
-#define ODServiceBrakeDC ODServiceBrake
 
 // missing size and signed interpretation in registry
 #define OD_BRAKE_THRESHOLD_INDEX 0x3012
@@ -138,29 +138,26 @@ float_t od_kd_5;
 #define OD_KD_5_SUBINDEX 0x0E
 
 // for NMTs, no index and subindex in registry
-uint8_t od_operation_mode;
 enum ODOperatingMode : uint8_t {
     MODE_STOPPED        = 0x02,
     MODE_PREOP          = 0x80,
     MODE_OPERATIONAL    = 0x01
 };
+uint8_t od_operation_mode;
 
-uint8_t od_direction_mode = 0;
-#define OD_DIRECTION_MODE_INDEX 0x6060
-#define OD_DIRECTION_MODE_SUBINDEX 0x00
 enum ODDirectionMode : uint8_t {
     REVERSE_MODE        = 1,
     NEUTRAL_MODE        = 2,
     FORWARD_MODE        = 3
 };
+uint8_t od_direction_mode = 0;
+#define OD_DIRECTION_MODE_INDEX 0x6060
+#define OD_DIRECTION_MODE_SUBINDEX 0x00
 
 uint8_t od_condition_mode = 0;
 #define OD_CONDITION_MODE_INDEX 0x6061
 #define OD_CONDITION_MODE_SUBINDEX 0x00
 
-uint8_t od_challenge_mode = CHALLENGE_THROTTLE;
-#define OD_CHALLENGE_MODE_INDEX 0x6062
-#define OD_CHALLENGE_MODE_SUBINDEX 0x00
 enum ODChallengeMode : uint8_t {
     CHALLENGE_THROTTLE          = 1,
     CHALLENGE_SPEED_CONTROL     = 2,
@@ -168,14 +165,17 @@ enum ODChallengeMode : uint8_t {
     CHALLENGE_ENERGY_RECOVERY   = 4,
     CHALLENGE_TRACTION          = 5
 };
+uint8_t od_challenge_mode = CHALLENGE_THROTTLE;
+#define OD_CHALLENGE_MODE_INDEX 0x6062
+#define OD_CHALLENGE_MODE_SUBINDEX 0x00
 
-uint8_t od_horn_toggle = HORN_DEFAULT;
-#define OD_HORN_TOGGLE_INDEX 0x6065
-#define OD_HORN_TOGGLE_SUBINDEX 0x00
 enum ODHornToggle : uint8_t {
     PLAY_SOUND      = 1,
     HORN_DEFAULT    = 0
 };
+uint8_t od_horn_toggle = HORN_DEFAULT;
+#define OD_HORN_TOGGLE_INDEX 0x6065
+#define OD_HORN_TOGGLE_SUBINDEX 0x00
 
 uint16_t od_temperature_front = 0;
 #define OD_TEMPERATURE_FRONT_INDEX 0x1004
@@ -253,7 +253,7 @@ PdoMapEntry PDO_PWR_RE_MAP[] = {
 };
 #define PDO_PWR_RE_COUNT 2
 
-#define PDO_TEMP_COB_ID TPDO2_FUNCODE + BATTERY_ID
+#define PDO_TEMP_COB_ID TPDO1_FUNCODE + LIGHTS_ID
 PdoMapEntry PDO_TEMP_MAP[] = {
     {OD_TEMPERATURE_FRONT_INDEX, OD_TEMPERATURE_FRONT_SUBINDEX, 8*sizeof(od_temperature_front)},
     {OD_TEMPERATURE_REAR_INDEX, OD_TEMPERATURE_REAR_SUBINDEX, 8*sizeof(od_temperature_rear)}
