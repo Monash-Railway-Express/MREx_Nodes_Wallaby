@@ -42,6 +42,7 @@ uint16_t od_regen_brake = 0;
 #define OD_REGEN_BRAKE_INDEX 0x3012
 #define OD_REGEN_BRAKE_SUBINDEX 0x00
 
+// TODO - check these values (it changed in the node files a few times during comp week) then update Brakes.ino etc.
 enum ODServiceBrake : uint8_t {
     NOT_BRAKING         = 1,
     BRAKING             = 0
@@ -52,7 +53,7 @@ uint8_t od_service_brake_mc = 1;
 #define OD_SERVICE_BRAKE_MC_SUBINDEX 0x01
 #define ODServiceBrakeMC ODServiceBrake
 
-uint8_t od_service_brake_dc;
+uint8_t od_service_brake_dc = 0;
 #define OD_SERVICE_BRAKE_DC_INDEX 0x3012
 #define OD_SERVICE_BRAKE_DC_SUBINDEX 0x02
 #define ODServiceBrakeDC ODServiceBrake

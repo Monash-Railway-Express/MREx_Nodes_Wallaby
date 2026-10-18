@@ -1,7 +1,8 @@
-#include "CAN_MREx.h"
+#include <CAN_MREx.h>
 #include <Adafruit_NeoPixel.h>
 
-uint8_t nodeID = 2; // brakes node id is 2
+#include "../../../shared/MREx.h"
+uint8_t NODE_ID = BRAKES_ID;
 
 #define TX_GPIO_NUM GPIO_NUM_8 //18
 #define RX_GPIO_NUM GPIO_NUM_7 //19
@@ -15,25 +16,12 @@ Adafruit_NeoPixel pixel(LED_COUNT, LED_LIGHT, NEO_GRB + NEO_KHZ800);
 uint8_t lastOut = 255 ;// remembers what the brake output was last time
 // manually set it high at the start because when the code runs it will se a change and print a message
 
-
-// OD 0x3012:02 – Service brake request from motor node (1 = no brake, 0 = apply)
-uint8_t od_service_brake_dc = 0;
-
-// OD 0x3012:01 – Service brake request from motor node (1 = no brake, 0 = apply)
-uint8_t od_service_brake_mc = 1;
-
-// OD 0x6060:00 – Direction mode from motor node (1=rev, 2=neutral, 3=fwd)
-uint8_t od_direction_mode = 0;
-
-
-
-
 void setup() {
   Serial.begin(115200);
   delay(1000); // wait to help connection
   Serial.println("Brakes node started (Node 2)");
 
-  initCANMREX(TX_GPIO_NUM, RX_GPIO_NUM, nodeID);
+  initCANMREX(TX_GPIO_NUM, RX_GPIO_NUM, NODE_ID);
 
   pinMode(SERVICE_BRAKE_PIN, OUTPUT);
   // pinMode(LED_LIGHT, OUTPUT);
@@ -51,15 +39,15 @@ void setup() {
   // nodeOperatingMode = 0x01; 
   
 // register od entries
-  registerODEntry(0x3012, 0x01, 2, sizeof(od_service_brake_mc), &od_service_brake_mc); // brake flag motor controls
-  registerODEntry(0x3012, 0x02, 2, sizeof(od_service_brake_dc), &od_service_brake_dc); // brake flag driver controls
-  registerODEntry(0x6060, 0x00, 2, sizeof(od_direction_mode), &od_direction_mode); // direction mode
+  registerODEntry(OD_SERVICE_BRAKE_MC_INDEX,  OD_SERVICE_BRAKE_MC_SUBINDEX, 2, sizeof(od_service_brake_mc), &od_service_brake_mc); // brake flag motor controls
+  registerODEntry(OD_SERVICE_BRAKE_DC_INDEX,  OD_SERVICE_BRAKE_DC_SUBINDEX, 2, sizeof(od_service_brake_dc), &od_service_brake_dc); // brake flag driver controls
+  registerODEntry(OD_DIRECTION_MODE_INDEX,    OD_DIRECTION_MODE_SUBINDEX,   2, sizeof(od_direction_mode),   &od_direction_mode); // direction mode
 
   xTaskCreatePinnedToCore(
       CAN_Task,
       "CAN Task",
       6144,
-      &nodeID,
+      &NODE_ID,
       3,
       NULL,
       0
@@ -77,13 +65,13 @@ void loop() {
   // 6. Unknown => APPLY
   
   // STOPPED
-  if (nodeOperatingMode == 0x02) {
+  if (nodeOperatingMode == MODE_STOPPED) {
     out = LOW;
     pixel.setPixelColor(0, pixel.Color(50, 0, 0)); // Red
   }
 
   // PRE‑OPERATIONAL
-  else if (nodeOperatingMode == 0x80) {
+  else if (nodeOperatingMode == MODE_PREOP) {
     // Neutral => allow pushing
     // 0 od entry means brakes on
     if (od_service_brake_dc == 0) {
@@ -97,7 +85,7 @@ void loop() {
   }
 
   // OPERATIONAL
-  else if (nodeOperatingMode == 0x01) {
+  else if (nodeOperatingMode == MODE_OPERATIONAL) {
 
     // Service brake requested
     if ((od_service_brake_dc == 0) || (od_service_brake_mc == 0)) {
