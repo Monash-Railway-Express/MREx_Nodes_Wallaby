@@ -1,4 +1,4 @@
-#include "CAN_MREx.h"
+#include <CAN_MREx.h>
 #include "controller.h"
 #include <stdlib.h>
 #include <HardwareSerial.h>
@@ -40,51 +40,8 @@
 // OD DEFINITIONS — DRIVER CONTROLS (LOCAL)
 // ═══════════════════════════════════════════════════════════════
 
-// OD 0x3012:00 – Regen Brake (0–1023). Mapped to TPDO1.
-uint16_t od_regen_brake = 0;
-
-// OD 0x606A:00 - Motor command / throttle demand (0–1023). Mapped to TPDO1.
-uint16_t od_motor_command = 0;
-
-// OD 0x6060:00 - Direction mode (1=back, 2=neutral, 3=forward).
-uint8_t od_direction_mode = 3;
-
-// OD 0x6062:00 - Challenge mode (1=throttle, 2=speed, 3=autostop, 4=regen, 5=traction).
-uint8_t od_challenge_mode = 1;
-
-// OD 0x6065:00 - Horn toggle (1=active, 0=default).
-uint8_t od_horn_toggle = 0;
-
 // OD 0x3012:02 - Service brake (0=not braking, 1=braking).
-uint8_t od_service_brake_dc = BRAKE_APPLIED;
-
-// Free
-uint8_t od_switch_2 = 0;
-
-// OD 0x1051:00 - Location counter. Written by autostop node (Node 6) via SDO.
-// Increments as loco passes markers around the circuit.
-uint8_t od_location_counter = 0;
-
-// ═══════════════════════════════════════════════════════════════
-// OD DEFINITIONS — RECEIVED FROM OTHER NODES VIA RPDO
-// ═══════════════════════════════════════════════════════════════
-
-// From Battery node (Node 7) via RPDO1 (COB-ID 0x187)
-uint32_t od_current          = 0;  // 0x2000:00 — mA, divide by 1000 for A
-uint16_t od_voltage          = 0;  // 0x2000:01 — mV, divide by 1000 for V
-uint16_t od_soc              = 0;  // 0x2000:02 — x10, divide by 10 for %
-
-// From Battery node (Node 7) via RPDO2 (COB-ID 0x287)
-uint32_t od_power            = 0;  // 0x2000:03 — W direct
-uint32_t od_recovered_energy = 0;  // 0x2000:04 — J direct
-
-// From Motor node (Node 1) via RPDO1 (COB-ID 0x181)
-uint32_t od_true_speed       = 0;  // 0x606C:00 — km/h x10 (divide by 10)
-uint32_t od_tractive_effort  = 0;  // 0x606E:00 — > 0 means tractive effort applied
-
-// From Lights/Sensors node (Node 4) via RPDO3 (COB-ID 0x184)
-uint16_t od_temp_front       = 0;  // 0x1004:00 — °C direct
-uint16_t od_temp_rear        = 0;  // 0x1004:01 — °C direct
+od_service_brake_dc = BRAKE_APPLIED;
 
 // ═══════════════════════════════════════════════════════════════
 // TIMING + ADC BUFFERS
@@ -315,7 +272,7 @@ void updateNextion() {
   // Only reads from Node 6 when autostop challenge is active
   uint32_t autostopDetected = 0;
   if (od_challenge_mode == 3) {
-    autostopDetected = executeSDORead(NODE_ID, AUTOSTOP_ID, 0x1050, 0x00);
+    autostopDetected = executeSDORead(NODE_ID, AUTOSTOP_ID, OD_AUTOSTOP_DETECTION_INDEX, OD_AUTOSTOP_DETECTION_SUBINDEX);
   }
   bool autostopActive = (autostopDetected == 1);
   if (autostopActive != prevAutostop) {
@@ -509,68 +466,48 @@ void setup() {
 
   // ── OD registrations ───────────────────────────────────────
   // Local driver controls OD entries
-  registerODEntry(0x606A, 0x00, 2, sizeof(od_motor_command),    &od_motor_command);
-  registerODEntry(0x3012, 0x00, 2, sizeof(od_regen_brake),      &od_regen_brake);
-  registerODEntry(0x6060, 0x00, 2, sizeof(od_direction_mode),   &od_direction_mode);
-  registerODEntry(0x6062, 0x00, 2, sizeof(od_challenge_mode),   &od_challenge_mode);
-  registerODEntry(0x6065, 0x00, 2, sizeof(od_horn_toggle),      &od_horn_toggle);
-  registerODEntry(0x3012, 0x02, 2, sizeof(od_service_brake_dc), &od_service_brake_dc);
+  registerODEntry(OD_MOTOR_COMMAND_INDEX,     OD_MOTOR_COMMAND_SUBINDEX,      2, sizeof(od_motor_command),      &od_motor_command);
+  registerODEntry(OD_REGEN_BRAKE_INDEX,       OD_REGEN_BRAKE_SUBINDEX,        2, sizeof(od_regen_brake),        &od_regen_brake);
+  registerODEntry(OD_DIRECTION_MODE_INDEX,    OD_DIRECTION_MODE_SUBINDEX,     2, sizeof(od_direction_mode),     &od_direction_mode);
+  registerODEntry(OD_CHALLENGE_MODE_INDEX,    OD_CHALLENGE_MODE_SUBINDEX,     2, sizeof(od_challenge_mode),     &od_challenge_mode);
+  registerODEntry(OD_HORN_TOGGLE_INDEX,       OD_HORN_TOGGLE_SUBINDEX,        2, sizeof(od_horn_toggle),        &od_horn_toggle);
+  registerODEntry(OD_SERVICE_BRAKE_DC_INDEX,  OD_SERVICE_BRAKE_DC_SUBINDEX,   2, sizeof(od_service_brake_dc),   &od_service_brake_dc);
 
   // Location counter — written by autostop node (Node 6) via SDO
-  registerODEntry(0x1051, 0x00, 2, sizeof(od_location_counter), &od_location_counter);
+  registerODEntry(OD_LOCATION_COUNTER_INDEX,  OD_LOCATION_COUNTER_SUBINDEX,   2, sizeof(od_location_counter),   &od_location_counter);
 
   // Incoming telemetry OD entries — populated via RPDO
-  registerODEntry(0x606C, 0x00, 2, sizeof(od_true_speed),       &od_true_speed);
-  registerODEntry(0x606E, 0x00, 2, sizeof(od_tractive_effort),  &od_tractive_effort);
-  registerODEntry(0x2000, 0x00, 2, sizeof(od_current),          &od_current);
-  registerODEntry(0x2000, 0x01, 2, sizeof(od_voltage),          &od_voltage);
-  registerODEntry(0x2000, 0x02, 2, sizeof(od_soc),              &od_soc);
-  registerODEntry(0x2000, 0x03, 2, sizeof(od_power),            &od_power);
-  registerODEntry(0x2000, 0x04, 2, sizeof(od_recovered_energy), &od_recovered_energy);
-  registerODEntry(0x1004, 0x00, 2, sizeof(od_temp_front),       &od_temp_front);
-  registerODEntry(0x1004, 0x01, 2, sizeof(od_temp_rear),        &od_temp_rear);
+  registerODEntry(OD_TRUE_SPEED_INDEX,        OD_TRUE_SPEED_SUBINDEX,         2, sizeof(od_true_speed),         &od_true_speed);
+  registerODEntry(OD_TRACTIVE_EFFORT_INDEX,   OD_TRACTIVE_EFFORT_SUBINDEX,    2, sizeof(od_tractive_effort),    &od_tractive_effort);
+  registerODEntry(OD_CURRENT_INDEX,           OD_CURRENT_SUBINDEX,            2, sizeof(od_current),            &od_current);
+  registerODEntry(OD_VOLTAGE_INDEX,           OD_VOLTAGE_SUBINDEX,            2, sizeof(od_voltage),            &od_voltage);
+  registerODEntry(OD_SOC_INDEX,               OD_SOC_SUBINDEX,                2, sizeof(od_soc),                &od_soc);
+  registerODEntry(OD_POWER_INDEX,             OD_POWER_SUBINDEX,              2, sizeof(od_power),              &od_power);
+  registerODEntry(OD_RECOVERED_ENERGY_INDEX,  OD_RECOVERED_ENERGY_SUBINDEX,   2, sizeof(od_recovered_energy),   &od_recovered_energy);
+  registerODEntry(OD_TEMPERATURE_FRONT_INDEX, OD_TEMPERATURE_FRONT_SUBINDEX,  2, sizeof(od_temperature_front),  &od_temperature_front);
+  registerODEntry(OD_TEMPERATURE_REAR_INDEX,  OD_TEMPERATURE_REAR_SUBINDEX,   2, sizeof(od_temperature_rear),   &od_temperature_rear);
 
   // ── TPDO — driver controls transmit ────────────────────────
-  configureTPDO(0, 0x180 + NODE_ID, 255, 100, 100);
-  PdoMapEntry tpdoEntries[] = {
-    {0x3012, 0x00, 16},  // regen brake
-    {0x606A, 0x00, 16},  // motor command
-  };
-  mapTPDO(0, tpdoEntries, 2);
+  configureTPDO(0, PDO_RGB_MTCM_COB_ID, 255, 100, 100);
+  mapTPDO(0, PDO_RGB_MTCM_MAP, PDO_RGB_MTCM_COUNT);
 
   // ── RPDOs — receive telemetry from other nodes ──────────────
 
   // RPDO1 — Motor TPDO1 (COB-ID 0x181): true speed
-  configureRPDO(0, 0x181, 255, 0);
-  PdoMapEntry rpdoMotor[] = {
-    {0x606C, 0x00, 32},  // true speed
-  };
-  mapRPDO(0, rpdoMotor, 1);
+  configureRPDO(0, PDO_TS_COB_ID, 255, 0);
+  mapRPDO(0, PDO_TS_MAP, PDO_TS_COUNT);
 
   // RPDO2 — Battery TPDO1 (COB-ID 0x187): current + voltage + SOC
-  configureRPDO(1, 0x187, 255, 0);
-  PdoMapEntry rpdoBatt1[] = {
-    {0x2000, 0x00, 32},  // current (mA)
-    {0x2000, 0x01, 16},  // voltage (mV)
-    {0x2000, 0x02, 16},  // SOC (x10)
-  };
-  mapRPDO(1, rpdoBatt1, 3);
+  configureRPDO(1, PDO_IVQ_COB_ID, 255, 0);
+  mapRPDO(1, PDO_IVQ_MAP, PDO_IVQ_COUNT);
 
   // RPDO3 — Battery TPDO2 (COB-ID 0x287): power + recovered energy
-  configureRPDO(2, 0x287, 255, 0);
-  PdoMapEntry rpdoBatt2[] = {
-    {0x2000, 0x03, 32},  // power (W)
-    {0x2000, 0x04, 32},  // recovered energy (J)
-  };
-  mapRPDO(2, rpdoBatt2, 2);
+  configureRPDO(2, PDO_PWR_RE_COB_ID, 255, 0);
+  mapRPDO(2, PDO_PWR_RE_MAP, PDO_PWR_RE_COUNT);
 
   // RPDO4 — Lights/Sensors TPDO (COB-ID 0x184): temperature
-  configureRPDO(3, 0x184, 255, 0);
-  PdoMapEntry rpdoLights[] = {
-    {0x1004, 0x00, 16},  // temp front (°C)
-    {0x1004, 0x01, 16},  // temp rear (°C)
-  };
-  mapRPDO(3, rpdoLights, 2);
+  configureRPDO(3, PDO_TEMP_COB_ID, 255, 0);
+  mapRPDO(3, PDO_TEMP_MAP, PDO_TEMP_COUNT);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -687,7 +624,7 @@ void HandleHorn() {
 
   if (od_horn_toggle != newHornToggle) {
     od_horn_toggle = newHornToggle;
-    executeSDOWrite(NODE_ID, AUDIO_ID, 0x6065, 0x00, sizeof(od_horn_toggle), &od_horn_toggle);
+    executeSDOWrite(NODE_ID, AUDIO_ID, OD_HORN_TOGGLE_INDEX, OD_HORN_TOGGLE_SUBINDEX, sizeof(od_horn_toggle), &od_horn_toggle);
     if (od_horn_toggle) {
       sendText("t_horn", "Active");
       sendColour("t_horn", "pco", NEX_RED);
@@ -714,7 +651,7 @@ void HandleLocation() {
   if (pressed && !prevBtn) {
     // Reset location counter to 0 on autostop node only
     od_location_counter = 0;
-    executeSDOWrite(NODE_ID, AUTOSTOP_ID, 0x1051, 0x00,
+    executeSDOWrite(NODE_ID, AUTOSTOP_ID, OD_LOCATION_COUNTER_INDEX, OD_LOCATION_COUNTER_SUBINDEX,
                     sizeof(od_location_counter), &od_location_counter);
     // Show reset confirmation on screen
     sendText("t_location", "Location Counter Reset");
@@ -757,7 +694,7 @@ void HandleParking() {
   Serial.print(newServiceBrake);
   if (od_service_brake_dc != newServiceBrake) {
     od_service_brake_dc = newServiceBrake;
-    executeSDOWrite(NODE_ID, BRAKES_ID, 0x3012, 0x02, sizeof(od_service_brake_dc), &od_service_brake_dc);
+    executeSDOWrite(NODE_ID, BRAKES_ID, OD_SERVICE_BRAKE_DC_INDEX, OD_SERVICE_BRAKE_DC_SUBINDEX, sizeof(od_service_brake_dc), &od_service_brake_dc);
     Serial.print("Sending Parking: "); Serial.println(od_service_brake_dc);
   }
 }
@@ -768,8 +705,8 @@ void HandleDirection() {
   Serial.print(newDirectionMode);
   if ((od_direction_mode != newDirectionMode) && (newDirectionMode > 0)) {
     od_direction_mode = newDirectionMode;
-    executeSDOWrite(NODE_ID, MOTOR_ID,  0x6060, 0x00, sizeof(od_direction_mode), &od_direction_mode);
-    executeSDOWrite(NODE_ID, LIGHTS_ID, 0x6060, 0x00, sizeof(od_direction_mode), &od_direction_mode);
+    executeSDOWrite(NODE_ID, MOTOR_ID,  OD_DIRECTION_MODE_INDEX, OD_DIRECTION_MODE_SUBINDEX, sizeof(od_direction_mode), &od_direction_mode);
+    executeSDOWrite(NODE_ID, LIGHTS_ID, OD_DIRECTION_MODE_INDEX, OD_DIRECTION_MODE_SUBINDEX, sizeof(od_direction_mode), &od_direction_mode);
     Serial.print("Sending direction: "); Serial.println(od_direction_mode);
   }
 }
@@ -781,8 +718,8 @@ void HandleChallenge() {
     Serial.print(newChallengeMode);
     if ((od_challenge_mode != newChallengeMode) && (newChallengeMode > 0)) {
       od_challenge_mode = newChallengeMode;
-      executeSDOWrite(NODE_ID, MOTOR_ID,    0x6062, 0x00, sizeof(od_challenge_mode), &od_challenge_mode);
-      executeSDOWrite(NODE_ID, AUTOSTOP_ID, 0x6062, 0x00, sizeof(od_challenge_mode), &od_challenge_mode);
+      executeSDOWrite(NODE_ID, MOTOR_ID,    OD_CHALLENGE_MODE_INDEX, OD_CHALLENGE_MODE_SUBINDEX, sizeof(od_challenge_mode), &od_challenge_mode);
+      executeSDOWrite(NODE_ID, AUTOSTOP_ID, OD_CHALLENGE_MODE_INDEX, OD_CHALLENGE_MODE_SUBINDEX, sizeof(od_challenge_mode), &od_challenge_mode);
       Serial.print("Sending Challenge: "); Serial.println(od_challenge_mode);
     }
 }

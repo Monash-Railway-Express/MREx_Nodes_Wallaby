@@ -17,6 +17,8 @@
 #ifndef MREX_H
 #define MREX_H
 
+// TODO - EMCY codes?
+
 #include <Arduino.h>
 #include <CAN_MREx.h>
 
@@ -42,7 +44,8 @@ uint16_t od_regen_brake = 0;
 #define OD_REGEN_BRAKE_INDEX 0x3012
 #define OD_REGEN_BRAKE_SUBINDEX 0x00
 
-// TODO - check these values (it changed in the node files a few times during comp week) then update Brakes.ino etc.
+// TODO - check these and od_service_brake_mc and od_service_brake_dc values (the interpretation changed in the node files a few times during comp week)
+// then update Brakes.ino, controller.h, driver_controller.ino etc. to use these values
 enum ODServiceBrake : uint8_t {
     NOT_BRAKING         = 1,
     BRAKING             = 0
@@ -70,7 +73,7 @@ uint32_t od_true_speed = 0;
 #define OD_TRUE_SPEED_INDEX 0x606C
 #define OD_TRUE_SPEED_SUBINDEX 0x00
 
-// missing interpretation in registry
+uint32_t od_tractive_effort = 0;
 #define OD_TRACTIVE_EFFORT_INDEX 0x606E
 #define OD_TRACTIVE_EFFORT_SUBINDEX 0x00
 
@@ -155,7 +158,7 @@ uint8_t od_condition_mode = 0;
 #define OD_CONDITION_MODE_INDEX 0x6061
 #define OD_CONDITION_MODE_SUBINDEX 0x00
 
-uint8_t od_challenge_mode = 1;
+uint8_t od_challenge_mode = CHALLENGE_THROTTLE;
 #define OD_CHALLENGE_MODE_INDEX 0x6062
 #define OD_CHALLENGE_MODE_SUBINDEX 0x00
 enum ODChallengeMode : uint8_t {
@@ -166,7 +169,7 @@ enum ODChallengeMode : uint8_t {
     CHALLENGE_TRACTION          = 5
 };
 
-uint8_t od_horn_toggle;
+uint8_t od_horn_toggle = HORN_DEFAULT;
 #define OD_HORN_TOGGLE_INDEX 0x6065
 #define OD_HORN_TOGGLE_SUBINDEX 0x00
 enum ODHornToggle : uint8_t {
@@ -174,27 +177,28 @@ enum ODHornToggle : uint8_t {
     HORN_DEFAULT    = 0
 };
 
-uint16_t od_temperature_front;
+uint16_t od_temperature_front = 0;
 #define OD_TEMPERATURE_FRONT_INDEX 0x1004
 #define OD_TEMPERATURE_FRONT_SUBINDEX 0x00
 
-uint16_t od_temperature_rear;
+uint16_t od_temperature_rear = 0;
 #define OD_TEMPERATURE_REAR_INDEX 0x1004
 #define OD_TEMPERATURE_REAR_SUBINDEX 0x01
 
+// TODO - interpretation enum (driver_controller.ino)
 uint8_t od_autostop_detection = 0;
 #define OD_AUTOSTOP_DETECTION_INDEX 0x1050
 #define OD_AUTOSTOP_DETECTION_SUBINDEX 0x00
 
-uint32_t od_current;
+uint32_t od_current = 0;
 #define OD_CURRENT_INDEX 0x2000
 #define OD_CURRENT_SUBINDEX 0x00
 
-uint16_t od_voltage;
+uint16_t od_voltage = 0;
 #define OD_VOLTAGE_INDEX 0x2000
 #define OD_VOLTAGE_SUBINDEX 0x01
 
-uint16_t od_soc;
+uint16_t od_soc = 0;
 #define OD_SOC_INDEX 0x2000
 #define OD_SOC_SUBINDEX 0x02
 
@@ -209,6 +213,10 @@ uint32_t od_recovered_energy = 0;
 uint32_t od_cumulative_energy = 0;
 #define OD_CUMULATIVE_ENERGY_INDEX 0x2000
 #define OD_CUMULATIVE_ENERGY_SUBINDEX 0x05
+
+uint8_t od_location_counter = 0;
+#define OD_LOCATION_COUNTER_INDEX 0x1051
+#define OD_LOCATION_COUNTER_SUBINDEX 0x00
 
 // PDO Maps
 #define PDO_TS_COB_ID TPDO1_FUNCODE + MOTOR_ID
@@ -230,11 +238,26 @@ PdoMapEntry PDO_CE_MAP[] = {
 };
 #define PDO_CE_COUNT 1
 
+#define PDO_IVQ_COB_ID TPDO1_FUNCODE + BATTERY_ID
+PdoMapEntry PDO_IVQ_MAP[] = {
+    {OD_CURRENT_INDEX, OD_CURRENT_SUBINDEX, 8*sizeof(od_current)},
+    {OD_VOLTAGE_INDEX, OD_VOLTAGE_SUBINDEX, 8*sizeof(od_voltage)},
+    {OD_SOC_INDEX, OD_SOC_SUBINDEX, 8*sizeof(od_soc)},
+};
+#define PDO_IVQ_COUNT 3
+
 #define PDO_PWR_RE_COB_ID TPDO2_FUNCODE + BATTERY_ID
 PdoMapEntry PDO_PWR_RE_MAP[] = {
     {OD_POWER_INDEX, OD_POWER_SUBINDEX, 8*sizeof(od_power)},
     {OD_RECOVERED_ENERGY_INDEX, OD_RECOVERED_ENERGY_SUBINDEX, 8*sizeof(od_recovered_energy)}
 };
 #define PDO_PWR_RE_COUNT 2
+
+#define PDO_TEMP_COB_ID TPDO2_FUNCODE + BATTERY_ID
+PdoMapEntry PDO_TEMP_MAP[] = {
+    {OD_TEMPERATURE_FRONT_INDEX, OD_TEMPERATURE_FRONT_SUBINDEX, 8*sizeof(od_temperature_front)},
+    {OD_TEMPERATURE_REAR_INDEX, OD_TEMPERATURE_REAR_SUBINDEX, 8*sizeof(od_temperature_rear)}
+};
+#define PDO_TEMP_COUNT 2
 
 #endif // MREX_H

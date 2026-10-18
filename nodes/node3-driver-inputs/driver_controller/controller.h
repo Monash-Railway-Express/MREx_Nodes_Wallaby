@@ -3,6 +3,9 @@
 #ifndef CONTROLLER
 #define CONTROLLER
 
+#include "../../../shared/MREx.h"
+uint8_t NODE_ID = DRIVER_ID;
+
 // Defining Function prototypes
 void SendAllNMT(uint8_t operatingMode);
 
@@ -60,19 +63,6 @@ void InitBuffer(ADCBuffer* buf, int pin);
 #define NEXTION_TX_PIN  GPIO_NUM_18
 #define NEXTION_RX_PIN  GPIO_NUM_17
 
-uint8_t NODE_ID = 3;
-
-// Defining Node IDs
-#define MOTOR_ID    0x01
-#define BRAKES_ID   0x02
-#define DRIVER_ID   0x03
-#define LIGHTS_ID   0x04
-#define AUDIO_ID    0x05
-#define AUTOSTOP_ID 0x06
-#define BATTERY_ID  0x07
-#define LOGGER_ID   0x08
-#define LCD_ID      0x09
-
 /*
 location announcement counter values. 
 Location announcement counter is incremented via SDO every time train passes a marker.
@@ -99,14 +89,7 @@ Note: 2 and 3 are skipped as these are the traction challenge markers passed ove
 #define BRAKE_APPLIED 0
 #define BRAKE_RELEASED 1
 
-// Defining operating mode enum
-enum OperatingMode : uint8_t {
-    MODE_STOPPED       = 0x02,
-    MODE_PREOP         = 0x80,
-    MODE_OPERATIONAL   = 0x01
-};
-
-const OperatingMode opModes[4] = {MODE_STOPPED, MODE_STOPPED, MODE_PREOP, MODE_OPERATIONAL};
+const ODOperatingMode opModes[4] = {MODE_STOPPED, MODE_STOPPED, MODE_PREOP, MODE_OPERATIONAL};
 
 // ADC / filtering settings
 const int ADC_RES_BITS = 10;
