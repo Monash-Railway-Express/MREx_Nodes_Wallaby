@@ -7,10 +7,11 @@
  * for the Lights & Sensors node.
  *
  * @author Oscar Boulter
+ * @author Nhan Nguyen
  *
- * @date 		11/05/2026
+ * @date 		19/10/2026
  *
- * @version 1.1.1
+ * @version 1.3.1
  *
  * @organisation MREX
  *
@@ -22,21 +23,10 @@
 
 #define LIGHTS_N_SENSORS
 
+#include "../../../shared/MREx.h"
+uint8_t NODE_ID = LIGHTS_ID;
+
 #include <stdint.h>
-
-// --- Node ID ---
-uint8_t NODE_ID = 4;
-
-//Defining all Node ID's
-#define MOTOR_ID 0x01
-#define BRAKES_ID 0x02
-#define DRIVER_ID 0x03
-#define LIGHTS_ID 0x04
-#define AUDIO_ID 0x05
-#define AUTOSTOP_ID 0x06
-#define BATTERY_ID 0x07
-#define LOGGER_ID 0x08
-#define LCD_ID 0x09
 
 
 // --- CAN Pins ---

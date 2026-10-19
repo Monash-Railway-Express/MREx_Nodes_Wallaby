@@ -11,10 +11,11 @@
  * @author Aung Hpone Thant 
  * @author Chiara Gillam
  * @author Oscar Boulter
+ * @author Nhan Nguyen
  *
- * @date 		11/05/2026
+ * @date 		19/10/2026
  *
- * @version 1.3
+ * @version 1.3.1
  *
  * @organisation MREX
  *
@@ -22,18 +23,13 @@
  *
  */
 
-#include "CAN_MREx.h" // inlcudes all CAN MREX files
+#include <CAN_MREx.h> // inlcudes all CAN MREX files
 #include <lights_n_sensors.h>
 
-
-// --- OD definitions ---
-uint16_t od_temperature_front;
-uint16_t od_temperature_rear; 
 
 //misc variables
 unsigned long next_poll_time; //used for non blocking delay to request the current motor direction from motor controller
 uint32_t dir_mode32; // Will these eventually be ODs?
-uint8_t dir_mode;
 uint8_t drive_state = OFF;
 
 //all of this is sensor stuff which I believe Oscar is putting on another board.
@@ -71,19 +67,17 @@ void setup() {
 
   // User code Setup Begin: -------------------------------------------------
   // --- Register OD entries ---
-  registerODEntry(0x1004, 0x00, 2, sizeof(od_temperature_front), &od_temperature_front);
-  registerODEntry(0x1004, 0x01, 2, sizeof(od_temperature_rear), &od_temperature_rear);
-  registerODEntry(0x6060, 0x00, 2, sizeof(dir_mode), &dir_mode); 
+  registerODEntry(OD_TEMPERATURE_FRONT_INDEX, OD_TEMPERATURE_FRONT_SUBINDEX,  2, sizeof(od_temperature_front),  &od_temperature_front);
+  registerODEntry(OD_TEMPERATURE_REAR_INDEX,  OD_TEMPERATURE_REAR_SUBINDEX,   2, sizeof(od_temperature_rear),   &od_temperature_rear);
+  registerODEntry(OD_DIRECTION_MODE_INDEX,    OD_DIRECTION_MODE_SUBINDEX,     2, sizeof(od_direction_mode),     &od_direction_mode); 
 
   // --- Register TPDOs ---
   //TPDOs for sensors. Oscar is working on a separate board for this now, can ignore.
-  configureTPDO(0, 0x184 + NODE_ID, 255, 100, 100);
-
-  PdoMapEntry tpdoEntries[] = {
-      {0x1004, 0x00, 16},  // Example: index 0x2000, subindex 1, 16 bits
-      {0x1004, 0x01, 16}    // Example: index 0x2001, subindex 0, 8 bits
-    };
-  mapTPDO(0, tpdoEntries, 2);
+  // originally (COB-ID seems wrong and mismatched from driver controller RPDO?):
+  // configureTPDO(0, 0x184 + NODE_ID, 255, 100, 100);
+  // Using COB-ID 0x184 NOT 0x188:
+  configureTPDO(0, PDO_TEMP_COB_ID, 255, 100, 100);
+  mapTPDO(0, PDO_TEMP_MAP, PDO_TEMP_COUNT);
    
 
   // --- Register RPDOs ---
@@ -125,20 +119,20 @@ void loop() {
 
 
   // --- Stopped mode (This is default starting point) ---
-  if (nodeOperatingMode == 0x02){ 
+  if (nodeOperatingMode == MODE_STOPPED){ 
     //handleCAN(NODE_ID);
     
     drive_state = OFF;
   }
 
   // --- Pre operational state (This is where you can do checks and make sure that everything is okay) ---
-  if (nodeOperatingMode == 0x80){ 
+  if (nodeOperatingMode == MODE_PREOP){ 
     //handleCAN(NODE_ID);
     drive_state = PREOP;
   }
 
   // --- Operational state (Normal operating mode) ---
-  if (nodeOperatingMode == 0x01){ 
+  if (nodeOperatingMode == MODE_OPERATIONAL){ 
     //handleCAN(NODE_ID);
     //request the state of the motor drive direction every 200ms
     if (currentMillis >= next_poll_time)
@@ -158,21 +152,21 @@ void loop() {
 void HandleDirStates()
 {
   //reads the motor direction from the controller.
-  //dir_mode32 = executeSDORead(NODE_ID, 3, 0x6060, 0x00); 
-  //dirMode = 1;
-  //executeSDOWrite(NODE_ID, 3, 0x6060, 0x00, sizeof(uint8_t), &dirMode);
-  //dir_mode = (uint8_t)dir_mode32;
+  //dir_mode32 = executeSDORead(NODE_ID, 3, OD_DIRECTION_MODE_INDEX, OD_DIRECTION_MODE_SUBINDEX); 
+  //od_direction_mode = 1;
+  //executeSDOWrite(NODE_ID, 3, OD_DIRECTION_MODE_INDEX, OD_DIRECTION_MODE_SUBINDEX, sizeof(od_direction_mode), &od_direction_mode);
+  //od_direction_mode = (uint8_t)dir_mode32;
 
   //switches the drive state based on the motor direction
-  if(dir_mode == 2)
+  if(od_direction_mode == 2)
   {
     drive_state = NEUTRAL;
   }
-  if(dir_mode == 3)
+  if(od_direction_mode == 3)
   {
     drive_state = FORWARD;
   }
-  if(dir_mode == 1)
+  if(od_direction_mode == 1)
   {
     drive_state = REVERSE;
   }
@@ -334,7 +328,7 @@ void CheckSensors(){
     unsigned long currentTime = millis();
 
     if (currentTime - errorTFTime >= 5000){
-      Serial.println("Tempetaure inside Locomotive Front is Too High!");
+      Serial.println("Temperature inside Locomotive Front is Too High!");
       sendEMCY(0, NODE_ID, 0x00506);
       heatFrontLock = false;
     }
