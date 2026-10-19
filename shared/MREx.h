@@ -185,7 +185,7 @@ uint16_t od_temperature_rear = 0;
 #define OD_TEMPERATURE_REAR_INDEX 0x1004
 #define OD_TEMPERATURE_REAR_SUBINDEX 0x01
 
-// TODO - interpretation enum (driver_controller.ino)
+// TODO - interpretation enum (driver_controller.ino, autostop_detector.ino)
 uint8_t od_autostop_detection = 0;
 #define OD_AUTOSTOP_DETECTION_INDEX 0x1050
 #define OD_AUTOSTOP_DETECTION_SUBINDEX 0x00
