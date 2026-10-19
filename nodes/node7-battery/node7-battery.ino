@@ -5,15 +5,18 @@
  * It uses VedirectFrameHandler.cpp and VeDirectFrameHandler.h files which parse data received from the shunt and stores in a buffer that can be read.
  * @author Hoor E Jannat Urboshi
  * @author Arjuna Edirisinghe
- * @date 		17/04/2026
- * @version 2.0.0
+ * @author Nhan Nguyen
+ * @date 		19/10/2026
+ * @version 2.0.1
  * @organisation MREX
  * @see VeDirectFrameHandler.c and VeDirectFrameHandler.h
  */
 
+#include "../../shared/MREx.h"
+uint8_t NODE_ID = BATTERY_ID;
 #include <Arduino.h>
 #include <stdint.h>
-#include "CAN_MREx.h"
+#include <CAN_MREx.h>
 #include <HardwareSerial.h>
 
 #include "VeDirectFrameHandler.h" // ve direct parser
@@ -22,41 +25,10 @@
 // Constants and other
 // =============================================================================
 
-//Defining Node ID's
-#define MOTOR_ID 0x01
-#define BRAKES_ID 0x02
-#define DRIVER_ID 0x03
-#define LIGHTS_ID 0x04
-#define AUDIO_ID 0x05
-#define AUTOSTOP_ID 0x06
-#define BATTERY_ID 0x07
-#define LOGGER_ID 0x08
-#define LCD_ID 0x09
-
-// --- Node ID ---
-uint8_t NODE_ID = 0x07;
-
 // --- Pin Definitions ---
 #define TX_GPIO_NUM GPIO_NUM_5 // GPIO pin for CAN Transmit
 #define RX_GPIO_NUM GPIO_NUM_4 // GPIO pins for CAN Receive
 
-// --- Operating Modes ---
-enum OperatingMode : uint8_t {
-    MODE_STOPPED        = 0x02,
-    MODE_PREOP          = 0x80,
-    MODE_OPERATIONAL    = 0x01
-};
-
-// =============================================================================
-// OD Variable Definitions
-// =============================================================================
-
-uint32_t current_can = 0;
-uint16_t voltage = 0; // voltage always positive 
-uint32_t power_can = 0; // Instantenous Power
-uint16_t state_of_charge = 0; // 0-100%. +/- 0.1%. If the SOC is 88.3% it is sent as 883 so 16 bits enough.
-uint32_t recovered_energy_can = 0;
-int32_t cumulative_energy = 0;
 // =============================================================================
 // Global Variables
 // =============================================================================
@@ -67,18 +39,12 @@ uint32_t prev_power_sample = 0;
 uint32_t new_power_sample = 0;
 uint32_t power_sample = 0;
 int32_t slice_area = 0;
-uint32_t od_true_speed = 0;
 bool prev_sample_1 = false; // flag that is set to true after the first power sample after regen starts is received
 bool prev_sample_2 = false; // flag that is set to true after the first power sample after loco starts up again is received4
 unsigned long currentMillis = 0;
 unsigned long last_data_received_time = 0;
 const unsigned long shunt_data_interval = 1500; // If 1.5s pass without receiving data from the shunt, then send error message
 int32_t prev_time = 0;
-// OD 0x3012:00 – Regen brake request (0–1023). RW. Mapped to RPDO0.
-uint16_t od_regen_brake = 0;
-
-// OD 0x606A:00 – Raw motor command (0–255). RW. Mapped to RPDO0.
-uint16_t od_motor_command = 0;
 
 VeDirectFrameHandler veParser;
 
@@ -110,60 +76,31 @@ void setup() {
   );
 
   // --- Register OD entries ---
-  registerODEntry(0x2000, 0x00, 2, sizeof(current_can), &current_can); 
-  registerODEntry(0x2000, 0x01, 2, sizeof(voltage), &voltage); 
-  registerODEntry(0x2000, 0x02, 2, sizeof(state_of_charge), &state_of_charge); 
-  registerODEntry(0x2000, 0x03, 2, sizeof(power_can), &power_can);
-  registerODEntry(0x2000, 0x04, 2, sizeof(recovered_energy_can), &recovered_energy_can);
-  registerODEntry(0x2000, 0x05, 2, sizeof(cumulative_energy), &cumulative_energy);
-  registerODEntry(0x606C, 0x00, 2, sizeof(od_true_speed), &od_true_speed);
-  registerODEntry(0x3012, 0x00, 2, sizeof(od_regen_brake), &od_regen_brake);              // RPDO - 16bit
-  registerODEntry(0x606A, 0x00, 2, sizeof(od_motor_command), &od_motor_command); 
+  registerODEntry(OD_CURRENT_INDEX,           OD_CURRENT_SUBINDEX,            2, sizeof(od_current),            &od_current); 
+  registerODEntry(OD_VOLTAGE_INDEX,           OD_VOLTAGE_SUBINDEX,            2, sizeof(od_voltage),            &od_voltage); 
+  registerODEntry(OD_SOC_INDEX,               OD_SOC_SUBINDEX,                2, sizeof(od_soc),                &od_soc); 
+  registerODEntry(OD_POWER_INDEX,             OD_POWER_SUBINDEX,              2, sizeof(od_power),              &od_power);
+  registerODEntry(OD_RECOVERED_ENERGY_INDEX,  OD_RECOVERED_ENERGY_SUBINDEX,   2, sizeof(od_recovered_energy),   &od_recovered_energy);
+  registerODEntry(OD_CUMULATIVE_ENERGY_INDEX, OD_CUMULATIVE_ENERGY_SUBINDEX,  2, sizeof(od_cumulative_energy),  &od_cumulative_energy);
+  registerODEntry(OD_TRUE_SPEED_INDEX,        OD_TRUE_SPEED_SUBINDEX,         2, sizeof(od_true_speed),         &od_true_speed);
+  registerODEntry(OD_REGEN_BRAKE_INDEX,       OD_REGEN_BRAKE_SUBINDEX,        2, sizeof(od_regen_brake),        &od_regen_brake);              // RPDO - 16bit
+  registerODEntry(OD_MOTOR_COMMAND_INDEX,     OD_MOTOR_COMMAND_SUBINDEX,      2, sizeof(od_motor_command),      &od_motor_command); 
   // --- Configure TPDOs and RPDOs ---
 
-  configureTPDO(0, 0x180 + NODE_ID, 255, 100, 1000);  // TPDO 1, COB-ID, transType, inhibit, timer
-  configureTPDO(1, 0x280 + NODE_ID, 255, 100, 1000);  // TPDO 2, COB-ID, transType, inhibit, timer
-  configureTPDO(2, 0x380 + NODE_ID, 255, 100, 1000);  // TPDO 3
+  configureTPDO(0, PDO_IVQ_COB_ID, 255, 100, 1000);  // TPDO 1, COB-ID, transType, inhibit, timer
+  mapTPDO(0, PDO_IVQ_MAP, PDO_IVQ_COUNT); //TPDO 1, entries, num entries
 
-  // --- TPDO and RPDO entries ---
-  
-  PdoMapEntry tpdoEntries1[] = {
-      {0x2000, 0x00, 32},    // current
-      {0x2000, 0x01, 16},   // voltage
-      {0x2000, 0x02, 16},   // state of charge   
-    };
+  configureTPDO(1, PDO_PWR_RE_COB_ID, 255, 100, 1000);  // TPDO 2, COB-ID, transType, inhibit, timer
+  mapTPDO(1, PDO_PWR_RE_MAP, PDO_PWR_RE_COUNT); //TPDO 2, entries, num entries
 
-  PdoMapEntry tpdoEntries3[] = {
-      {0x2000, 0x05, 32},    // current
-    };
+  configureTPDO(2, PDO_CE_COB_ID, 255, 100, 1000);  // TPDO 3
+  mapTPDO(2, PDO_CE_MAP, PDO_CE_COUNT);
 
-  PdoMapEntry tpdoEntries2[] = {   
-      {0x2000, 0x03, 32},   // power
-      {0x2000, 0x04, 32},   // recovered energy
-    };
-    
-  // --- Map TPDOs and RPDOs ---
+  configureRPDO(0, PDO_TS_COB_ID, 255, 0);
+  mapRPDO(0, PDO_TS_MAP, PDO_TS_COUNT);
 
-  mapTPDO(0, tpdoEntries1, 3); //TPDO 1, entries, num entries
-  mapTPDO(1, tpdoEntries2, 2); //TPDO 2, entries, num entries
-  mapTPDO(2, tpdoEntries3, 1); //
-
-
-  configureRPDO(0, 0x181, 255, 0);
-  PdoMapEntry rpdo1[] = {
-    {0x606C, 0x00, 32},  // true speed
-  };
-
-
-
-  mapRPDO(0, rpdo1, 1);
-
-  configureRPDO(1, 0x183, 255, 0);
-  PdoMapEntry rpdo_entries[] = {
-      {0x3012, 0x00, 16},  // od_regen_brake
-      {0x606A, 0x00, 16}   // od_motor_command
-  };
-  mapRPDO(1, rpdo_entries, 2);
+  configureRPDO(1, PDO_RGB_MTCM_COB_ID, 255, 0);
+  mapRPDO(1, PDO_RGB_MTCM_MAP, PDO_RGB_MTCM_COUNT);
 
 }
 
@@ -218,13 +155,13 @@ void findRecoveredEnergy() {
     if (prev_sample_1 == false) {
       prev_power_sample = power_sample;
       prev_sample_1 = true;
-      recovered_energy_can = recovered_energy;
+      od_recovered_energy = recovered_energy;
       return;
     }
     new_power_sample = power_sample;
     slice_area = ((prev_power_sample + new_power_sample) / 2) * 1;
     recovered_energy += slice_area;
-    cumulative_energy += slice_area;               // accumulate recovered energy
+    od_cumulative_energy += slice_area;               // accumulate recovered energy
     prev_power_sample = new_power_sample;
   }
   else if ((power > 0) && (od_motor_command >= 50)) {
@@ -232,25 +169,25 @@ void findRecoveredEnergy() {
     if (recovered_energy <= 0) {
       recovered_energy = 0;
       prev_sample_2 = false;
-      recovered_energy_can = 0;
+      od_recovered_energy = 0;
       return;
     }
     power_sample = power;
     if (prev_sample_2 == false) {
       prev_power_sample = power_sample;
       prev_sample_2 = true;
-      recovered_energy_can = recovered_energy;
+      od_recovered_energy = recovered_energy;
       return;
     }
     new_power_sample = power_sample;
     slice_area = ((prev_power_sample + new_power_sample) / 2) * 1;
     if (slice_area >= recovered_energy) {
-      cumulative_energy -= recovered_energy;       // only subtract what was actually spent
+      od_cumulative_energy -= recovered_energy;       // only subtract what was actually spent
       recovered_energy = 0;
       prev_sample_2 = false;
     } else {
       recovered_energy -= slice_area;
-      cumulative_energy -= slice_area;             // accumulate spent energy
+      od_cumulative_energy -= slice_area;             // accumulate spent energy
     }
     prev_power_sample = new_power_sample;
   }
@@ -268,7 +205,7 @@ void findRecoveredEnergy() {
 
   // recovered_energy = recovered_energy - energy;
 
-  recovered_energy_can = (uint32_t)recovered_energy;
+  od_recovered_energy = (uint32_t)recovered_energy;
 }
 /**
  * @brief updates OD entries. OD entries are updated every second when new data is received into the buffer
@@ -279,19 +216,19 @@ void updateODentries(){
     // Iterate through all name-value pairs in the buffer. Find voltage, current, SOC, power in the buffer and assign the values to the variables in the object dictionary of the node.
     for (int i = 0; i < veParser.veEnd; ++i) {
        if (strcmp(veParser.veData[i].veName, "V") == 0){
-        voltage = atoi(veParser.veData[i].veValue);
+        od_voltage = atoi(veParser.veData[i].veValue);
        }
        else if (strcmp(veParser.veData[i].veName, "I") == 0){
         current = -atoi(veParser.veData[i].veValue);
-        current_can = current; 
+        od_current = current; 
        }
        else if (strcmp(veParser.veData[i].veName, "SOC") == 0){
-        state_of_charge = atoi(veParser.veData[i].veValue); // needs to be divided by 10 to get it in percentage. 995/10 = 99.5%.
+        od_soc = atoi(veParser.veData[i].veValue); // needs to be divided by 10 to get it in percentage. 995/10 = 99.5%.
        }
        else if (strcmp(veParser.veData[i].veName, "P") == 0){
         power = -atoi(veParser.veData[i].veValue);
         power = power - 80;
-        power_can = power; 
+        od_power = power; 
        }
   }
   veParser.clearData();
@@ -325,26 +262,26 @@ void loop(){
       break;
 
     // in operational mode, 
-case MODE_OPERATIONAL:
-  if (nodeOperatingMode == 0x01){ 
-    if (veParser.isDataAvailable()) {
-      updateODentries();
-      printf("--- OD Entries ---\n");
-      printf("current_can:          %ld mA\n",  (int32_t)current_can);
-      printf("voltage:              %u mV\n",   voltage);
-      printf("state_of_charge:      %.1f %%\n", state_of_charge / 10.0);
-      printf("power_can:            %ld W\n",   (int32_t)power_can);
-      printf("recovered_energy_can: %lu J\n",   recovered_energy_can);
-      printf("cumulative_energy:    %d J\n",    cumulative_energy);
-      printf("------------------\n");
-    }
-    if((millis() - prev_time) > 1000){
-      prev_time = millis();
-      findRecoveredEnergy();
+    case MODE_OPERATIONAL:
+      if (nodeOperatingMode == MODE_OPERATIONAL){ 
+        if (veParser.isDataAvailable()) {
+          updateODentries();
+          printf("--- OD Entries ---\n");
+          printf("current_can:          %ld mA\n",  (int32_t)od_current);
+          printf("voltage:              %u mV\n",   od_voltage);
+          printf("state_of_charge:      %.1f %%\n", od_soc / 10.0);
+          printf("power_can:            %ld W\n",   (int32_t)od_power);
+          printf("recovered_energy_can: %lu J\n",   od_recovered_energy);
+          printf("cumulative_energy:    %d J\n",    od_cumulative_energy);
+          printf("------------------\n");
+        }
+        if((millis() - prev_time) > 1000){
+          prev_time = millis();
+          findRecoveredEnergy();
 
-    }
-  }
-  break;
+        }
+      }
+      break;
 
     default: break;
   }

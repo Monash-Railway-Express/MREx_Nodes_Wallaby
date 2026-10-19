@@ -194,15 +194,15 @@ uint32_t od_current = 0;
 #define OD_CURRENT_INDEX 0x2000
 #define OD_CURRENT_SUBINDEX 0x00
 
-uint16_t od_voltage = 0;
+uint16_t od_voltage = 0; // voltage always positive 
 #define OD_VOLTAGE_INDEX 0x2000
 #define OD_VOLTAGE_SUBINDEX 0x01
 
-uint16_t od_soc = 0;
+uint16_t od_soc = 0; // 0-100%. +/- 0.1%. If the SOC is 88.3% it is sent as 883 so 16 bits enough.
 #define OD_SOC_INDEX 0x2000
 #define OD_SOC_SUBINDEX 0x02
 
-uint32_t od_power = 0;
+uint32_t od_power = 0; // Instantenous Power
 #define OD_POWER_INDEX 0x2000
 #define OD_POWER_SUBINDEX 0x03
 
@@ -210,7 +210,7 @@ uint32_t od_recovered_energy = 0;
 #define OD_RECOVERED_ENERGY_INDEX 0x2000
 #define OD_RECOVERED_ENERGY_SUBINDEX 0x04
 
-uint32_t od_cumulative_energy = 0;
+int32_t od_cumulative_energy = 0;
 #define OD_CUMULATIVE_ENERGY_INDEX 0x2000
 #define OD_CUMULATIVE_ENERGY_SUBINDEX 0x05
 
