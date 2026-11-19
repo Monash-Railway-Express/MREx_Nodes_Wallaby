@@ -3,6 +3,9 @@
 #ifndef CONTROLLER
 #define CONTROLLER
 
+#include "../../../shared/MREx.h"
+uint8_t NODE_ID = DRIVER_ID;
+
 // Defining Function prototypes
 void SendAllNMT(uint8_t operatingMode);
 
@@ -45,7 +48,7 @@ void InitBuffer(ADCBuffer* buf, int pin);
 #define EMCY_CLEAR_PIN    GPIO_NUM_16
 #define LOCATION_BUTTON_PIN    GPIO_NUM_12
 // #define BUTTON_2_PIN   GPIO_NUM_16  // commented out — GPIO16 used for Nextion RX
-#define BUTTON_2_PIN      GPIO_NUM_13   // temp reassignment — button unconnected
+#define CHALLENGE_BUTTON_PIN      GPIO_NUM_14   // temp reassignment — button unconnected
 #define SERVICE_BRAKE_PIN GPIO_NUM_36
 #define SWITCH_2_PIN      37
 
@@ -53,22 +56,12 @@ void InitBuffer(ADCBuffer* buf, int pin);
 #define CHALLENGE_MODE_PIN  GPIO_NUM_3
 #define OP_MODE_PIN         GPIO_NUM_4
 
+// Speed at which the Nextion speed bar reads 100% (km/h)
+#define SPEED_BAR_FULL_SCALE_KMH  15.0f
+
 // Nextion UART pins
 #define NEXTION_TX_PIN  GPIO_NUM_18
 #define NEXTION_RX_PIN  GPIO_NUM_17
-
-uint8_t NODE_ID = 3;
-
-// Defining Node IDs
-#define MOTOR_ID    0x01
-#define BRAKES_ID   0x02
-#define DRIVER_ID   0x03
-#define LIGHTS_ID   0x04
-#define AUDIO_ID    0x05
-#define AUTOSTOP_ID 0x06
-#define BATTERY_ID  0x07
-#define LOGGER_ID   0x08
-#define LCD_ID      0x09
 
 /*
 location announcement counter values. 
@@ -93,14 +86,10 @@ Note: 2 and 3 are skipped as these are the traction challenge markers passed ove
 #define NEX_CYAN   1055
 #define NEX_DARK   10
 
-// Defining operating mode enum
-enum OperatingMode : uint8_t {
-    MODE_STOPPED       = 0x02,
-    MODE_PREOP         = 0x80,
-    MODE_OPERATIONAL   = 0x01
-};
+#define BRAKE_APPLIED 0
+#define BRAKE_RELEASED 1
 
-const OperatingMode opModes[4] = {MODE_STOPPED, MODE_STOPPED, MODE_PREOP, MODE_OPERATIONAL};
+const ODOperatingMode opModes[4] = {MODE_STOPPED, MODE_STOPPED, MODE_PREOP, MODE_OPERATIONAL};
 
 // ADC / filtering settings
 const int ADC_RES_BITS = 10;

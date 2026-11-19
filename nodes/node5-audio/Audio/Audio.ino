@@ -1,5 +1,3 @@
-
-
 /**
  * @file Audio.ino
  * @brief CAN MREX Audio Control file 
@@ -9,15 +7,16 @@
  * between ESP32 and DFPlayerMini via UART. Uses DFRobotDFPlayerMini.h
  * 
  * @author Aung Hpone Thant
+ * @author Nhan Nguyen
  *
- * @date 03/04/2026
+ * @date 19/10/2026
  *
  * @organisation MREx
  *
  */
 
 /**
-TODO: invert horn signal before use PLEASE!!!!!
+NOTE: invert horn signal before use PLEASE!!!!!
 */
  /***************************************************
 DFPlayer - A Mini MP3 Player For Arduino
@@ -38,16 +37,15 @@ DFPlayer - A Mini MP3 Player For Arduino
  <https://www.dfrobot.com/wiki/index.php/DFPlayer_Mini_SKU:DFR0299#Connection_Diagram>
  ****************************************************/
 
-/*CURRENT AUDIO ORDERING: 
-(This is in the order they were copied onto the SD card. 
-To reorder them, you have to delete and recopy them in the sequence you want. 
-File names mean nothing.)
-IMPORTANT: 
+/*
 USE 16 bit .wav files for horn. Using MP3 adds small silences at start and end of clip, making looping sound choppy.
 */
+
+#include "../../../shared/MREx.h"
+uint8_t NODE_ID = AUDIO_ID;
 #include <CAN_MREx.h> // inlcudes all CAN MREX files
-#include "Arduino.h"
-#include "DFRobotDFPlayerMini.h"
+#include <Arduino.h>
+#include <DFRobotDFPlayerMini.h>
 #include <HardwareSerial.h>
 #include <map>
 
@@ -55,17 +53,12 @@ USE 16 bit .wav files for horn. Using MP3 adds small silences at start and end o
 
 // User code begin: ------------------------------------------------------
 // --- CAN MREx initialisation ---
-uint8_t nodeID = 5;  // Node 5 - Audio
 // --- Pin Definitions ---
 #define TX_GPIO_NUM GPIO_NUM_36 // Set GPIO pin for CAN Transmit
 #define RX_GPIO_NUM GPIO_NUM_35 // Set GPIO pins for CAN Receive
 
-#define STATUS_LED 5
+#define STATUS_LED 5 
 #define PREOP_LED 4
-
-// --- OD definitions ---
-uint8_t od_horn = 0;
-uint8_t od_loc_counter = 0;
 
 //DFPlayer Setup
 #define DFBUSY 13 //used to check if DFPlayer is playing tracks or not. Connect to BUSY pin on DFPlayer. If High, its free.
@@ -73,7 +66,7 @@ uint8_t od_loc_counter = 0;
 /*
 Sound index definition
 Note: These are the sounds in the order that they are copied to the SD card.
-To change any sound, it is better to move all audio files out of SD card and recopy them in this order
+The DFPlayer indexes songs in order that they were copied into the SD Card. These values reflect that.
 */
 #define STARTUP_FB_SOUND 1
 #define HORN_LOOP_SOUND 2
@@ -123,12 +116,6 @@ DFRobotDFPlayerMini myDFPlayer;
 
 
 //user variables
-// --- Operating Modes ---
-enum OperatingMode : uint8_t {
-    MODE_STOPPED        = 0x02,
-    MODE_PREOP          = 0x80,
-    MODE_OPERATIONAL    = 0x01
-};
 //function prototypes
 void printDetail(uint8_t type, int value);
 void StoppedMode();
@@ -146,7 +133,7 @@ void setup() {
   Serial.println("Serial Coms started at 115200 baud");
   
   //Initialize CANMREX protocol
-  initCANMREX(TX_GPIO_NUM, RX_GPIO_NUM, nodeID);
+  initCANMREX(TX_GPIO_NUM, RX_GPIO_NUM, NODE_ID);
   xTaskCreatePinnedToCore(
  
       CAN_Task,
@@ -155,7 +142,7 @@ void setup() {
  
       6144,
  
-      &nodeID,
+      &NODE_ID,
  
       3,
  
@@ -166,8 +153,8 @@ void setup() {
     );
   // User code Setup Begin: -------------------------------------------------
   // --- Register OD entries ---
-  registerODEntry(0x6065, 0x00, 1, sizeof(od_horn), &od_horn);
-  registerODEntry(0x1051, 0x00, 1, sizeof(od_loc_counter), &od_loc_counter);
+  registerODEntry(OD_HORN_TOGGLE_INDEX, OD_HORN_TOGGLE_SUBINDEX, 1, sizeof(od_horn_toggle), &od_horn_toggle);
+  registerODEntry(OD_LOCATION_COUNTER_INDEX, OD_LOCATION_COUNTER_SUBINDEX, 1, sizeof(od_location_counter), &od_location_counter);
   // --- Register TPDOs ---
   
 
@@ -175,7 +162,7 @@ void setup() {
 
 
   // --- DFPlayer Setup ---
-  player_serial.begin(9600, SERIAL_8N1, /*rx =*/18, /*tx =*/17);
+  player_serial.begin(9600, SERIAL_8N1, /*rx =*/18, /*tx =*/17); //this is the UART port to communicate with DFPlayer module. 
   Serial.println();
   Serial.println(F("Initializing DFPlayer ... (May take 3~5 seconds)"));
   
@@ -192,7 +179,7 @@ void setup() {
   Serial.println(F("Audio system online."));
   myDFPlayer.volume(30);  //Set volume value. From 0 to 30
   delay(500);
-  myDFPlayer.play(STARTUP_FB_SOUND);
+  myDFPlayer.play(STARTUP_FB_SOUND); 
   // --- Set pin modes ---
   pinMode(DFBUSY, INPUT);
   pinMode(STATUS_LED, OUTPUT);
@@ -231,19 +218,22 @@ void PreOpMode(){
 void OperationalMode(){
   digitalWrite(STATUS_LED, HIGH);
   digitalWrite(PREOP_LED, LOW);
+  HandleLocation();
   HandleHorn();
-  HandleAutoStop();
   Serial.println("Loop run");
 }
 /*
-* @brief Handles logic for playing the horn. 
+* @brief Handles logic for playing the horn. This used to have support to play a "start" "middle" and "end" sound to make
+* the horn sound more real, but this has entirely been scrapped for a single looping sound because the ESP kept crashing.
+* it was tested just before train was loaded and seems to be working fine, hence I (AP) will not touch it to make it cleaner in case
+* I break it again.
 *
 * @return Nothing
 */
 void HandleHorn() {
-  static bool hornStatePrev;
-  static uint8_t hornStateMNo = 1; //for horn state machin
-  hornStatePrev = (bool)od_horn;
+  static bool hornStatePrev; //previous state of the horn button. Used for edge detection.
+  static uint8_t hornStateMNo = 1; //the counter value for the horn state machine. 
+  hornStatePrev = (bool)od_horn_toggle;
   //Serial.print("Horn state:");
   //Serial.println(hornStatePrev);
 
@@ -283,16 +273,16 @@ void HandleHorn() {
 *
 * @return Nothing
 */
-void HandleAutoStop(){
+void HandleLocation(){
   static uint8_t prevCounter = 0; //state variable used for tracking changes to the autostop counter
 
 
   //play sound every time location counter updates
-  if(prevCounter != od_loc_counter){
-    prevCounter = od_loc_counter;
-    myDFPlayer.play(locationAnnounceSoundMap[od_loc_counter]);  
+  if(prevCounter != od_location_counter){
+    prevCounter = od_location_counter;
+    myDFPlayer.play(locationAnnounceSoundMap[od_location_counter]);  //retrieves the appropriate track number from the map. 
     Serial.print("Played location");
-    Serial.println(od_loc_counter);
+    Serial.println(od_location_counter);
   }
 
 }

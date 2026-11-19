@@ -31,14 +31,17 @@
  * @author Patrick McCarthy
  * @author Audrey Tasevski
  * @author Aung Hpone Thant
+ * @author Nhan Nguyen
  *
- * @date 27/05/2026
+ * @date 19/10/2026
  *
- * @version 1.1.1
+ * @version 1.1.3
  *
  * @organisation MREX
  */
 
+#include "../../../shared/MREx.h"
+uint8_t NODE_ID = AUTOSTOP_ID;
 #include <CAN_MREx.h>
 #include <Preferences.h>
 
@@ -50,29 +53,23 @@
 Preferences locAnnouncePrefs;
 
 
-// --- Node ID ---
-// Must NOT be const — CAN_MREx v1.13.0 requires a mutable pointer for the
-// FreeRTOS CAN task (xTaskCreatePinnedToCore passes &NODE_ID as pvParameters).
-uint8_t NODE_ID = 6;
-
-//Defining Node ID's
-#define MOTOR_ID 0x01
-#define BRAKES_ID 0x02
-#define DRIVER_ID 0x03
-#define LIGHTS_ID 0x04
-#define AUDIO_ID 0x05
-#define AUTOSTOP_ID 0x06
-#define BATTERY_ID 0x07
-#define LOGGER_ID 0x08
-#define LCD_ID 0x09
-
 // --- CAN transceiver pins ---
 #define TX_GPIO_NUM GPIO_NUM_14
 #define RX_GPIO_NUM GPIO_NUM_13
 
 // --- Location Announce Stuff ---
+#define LOC_ANN1_START 1
+#define LOC_ANN2_AUTOSTOP 4
+#define LOC_ANN3_COMFORT 5
+#define LOC_ANN4_COMFORT_END 6
+#define LOC_ANN5_HAVEN 7
+#define LOC_ANN6_TCN 8
+#define LOC_ANN7_TCN_END 9
+#define LOC_ANN8_END 10
+
 #define LOC_ANN_CD 1000 //cooldown between location annoucement changes 5s
 #define LOC_ANN_MAX_COUNT 10
+bool overrideIncrement = LOW; //this is set when a challenge mode (eg. Autostop, Energy Recovery, Traction) is selected, to override the normal incrementing
 bool standstillFlag = LOW; //flag for when a standstill announcement is triggered (eg. ride comfort start)
 
 //Private functions
@@ -102,30 +99,6 @@ static const uint32_t SENSOR_POLL_MS = 20;   // Sensor read interval
 // detection required.
 static const uint8_t AUTOSTOP_CONFIRM_COUNT   = 2;
 
-// Challenge mode value for autostop (matches od_challenge_mode on Node 3):
-// 1=throttle, 2=speed, 3=autostop, 4=regen, 5=traction
-#define AUTOSTOP_CHALLENGE_VALUE 3
-#define TRACTION_CHALLENGE_VALUE 5
-#define REGEN_CHALLENGE_VALUE 4
-
-// --- Destination node IDs ---
-static const uint8_t DEST_NODE_MOTOR = 1;  // Motor — receives detection alert SDO
-static const uint8_t DEST_NODE_DRIVER = 3;  // Driver controls
-
-// --- Object Dictionary addresses ---
-// OD 0x1050:00 — od_autostop_detection. This node is the source (SDO, RW).
-static const uint16_t OD_INDEX_AUTOSTOP_DET      = 0x1050;
-static const uint8_t  OD_SUBINDEX_AUTOSTOP_DET   = 0x00;
-
-// OD 0x6062:00 — od_challenge_mode. Node 3 SDO-writes this on switch change.
-static const uint16_t OD_INDEX_CHALLENGE_MODE     = 0x6062;
-static const uint8_t  OD_SUBINDEX_CHALLENGE_MODE  = 0x00;
-
-// OD 0x3016:00 — od_autostop_alert. Written by Node 6 to Node 3 on detection.
-// *** Node 3 must register this address as a writable uint8_t OD entry. ***
-// static const uint16_t OD_INDEX_AUTOSTOP_ALERT     = 0x3010;
-// static const uint8_t  OD_SUBINDEX_AUTOSTOP_ALERT  = 0x00;
-
 // --- EMCY error codes (Node 6 range: 0x0006xxxx) ---
 // Priority 0 = major (halts system), priority 1 = minor (logged warning, no halt).
 static const uint32_t EMCY_SENSOR_CIRCUIT_FAULT = 0x00060601;  // A == B (circuit open/short)
@@ -135,39 +108,9 @@ static const uint32_t EMCY_AUTOSTOP_TRIGGERED   = 0x00060602;  // Marker detecte
 static const uint32_t SERIAL_BAUD_RATE = 115200;
 static const uint32_t STARTUP_DELAY_MS = 1000;
 
-// --- OD variables ---
-
-// Index:    0x6062  Subindex: 0x00
-// Desc:     Challenge mode selector. Written by Node 3 (driver controls) via
-//           SDO when the operator changes the challenge rotary switch.
-//           1=throttle, 2=speed, 3=autostop, 4=regen, 5=traction.
-// Units:    Enum (uint8_t)
-// Dir:      Written externally by Node 3; read locally by this node.
-// PDO map:  None.
-uint8_t od_challenge_mode = 0;
-
-// Index:    0x1050  Subindex: 0x00
-// Desc:     Autostop lineside marker detection. 1 = detected (edge), 0 = clear.
-// Units:    Boolean (0/1, unsigned 8-bit)
-// Dir:      Written by this node; readable by others via SDO.
-// PDO map:  None.
-uint8_t od_autostop_detection = 0;
-
-// OD 1051:00 - Current number of the train location (0-8). <RW>.
-uint8_t od_location_counter = 0;
-
-// OD 0x606C:00 - True speed of motors (in km/h). <R>. Mapped to <RPDO1>.
-uint32_t od_true_speed = 0;
+// od_challenge_mode was 0 but is now initalised as CHALLENGE_THROTTLE=1 in the common header
 
 // User code end ----------------------------------------------------------
-
-
-// --- Operating modes (NMT state machine) ---
-enum OperatingMode : uint8_t {
-    MODE_STOPPED     = 0x02,
-    MODE_PREOP       = 0x80,
-    MODE_OPERATIONAL = 0x01
-};
 
 // --- Internal node state ---
 // These are reset on every entry to StoppedMode so state does not carry
@@ -328,8 +271,8 @@ static void _HandleAutostop(void) {
             // marker was detected. Node 3 must register 0x1050:00 as a
             // writable uint8_t OD entry to receive this.
             if((nowMs-lastSDOWrite)>500){
-                executeSDOWrite(NODE_ID, DEST_NODE_MOTOR,
-                                OD_INDEX_AUTOSTOP_DET, OD_SUBINDEX_AUTOSTOP_DET,
+                executeSDOWrite(NODE_ID, MOTOR_ID,
+                                OD_AUTOSTOP_DETECTION_INDEX, OD_AUTOSTOP_DETECTION_SUBINDEX,
                                 sizeof(od_autostop_detection), &od_autostop_detection);
                 lastSDOWrite = millis();
                 // _SendDetectionAlert();
@@ -343,9 +286,8 @@ static void _HandleAutostop(void) {
 }
 
 static void _SendPassing() {
-    executeSDOWrite(NODE_ID, AUDIO_ID, 0x1051, 0x00, sizeof(od_location_counter), &od_location_counter);
-    delay(10);
-    executeSDOWrite(NODE_ID, DRIVER_ID, 0x1051, 0x00, sizeof(od_location_counter), &od_location_counter);
+    executeSDOWrite(NODE_ID, AUDIO_ID,  OD_LOCATION_COUNTER_INDEX, OD_LOCATION_COUNTER_SUBINDEX, sizeof(od_location_counter), &od_location_counter);
+    executeSDOWrite(NODE_ID, DRIVER_ID, OD_LOCATION_COUNTER_INDEX, OD_LOCATION_COUNTER_SUBINDEX, sizeof(od_location_counter), &od_location_counter);
 }
 
 /*
@@ -360,6 +302,35 @@ static void _SendStandStill(){
 uint8_t _ChangeLocation(){
     static uint32_t lastMs      = 0;
     static uint32_t lastValidLoc = 0; //the last time a valid location was detected
+    static uint8_t prev_challenge_mode = 0;
+
+    static bool autostopArmed;
+    static bool tractionArmed;
+
+    //change detection
+    //set flag for autostop and traction announcement start.
+    if(prev_challenge_mode != od_challenge_mode){
+      prev_challenge_mode = od_challenge_mode;
+      switch(od_challenge_mode){
+        Serial.print("CHALLENGE VALUE:");
+        Serial.println(od_challenge_mode);
+        case CHALLENGE_AUTO_STOP:
+        autostopArmed = HIGH;
+        tractionArmed = LOW;
+        break;
+        
+        case CHALLENGE_TRACTION:
+        autostopArmed = LOW;
+        tractionArmed = HIGH;
+        break;
+
+        default:
+        autostopArmed = LOW;
+        tractionArmed = LOW;
+        break;
+      }
+    }
+    
     uint32_t nowMs = millis();
     uint8_t newLocation = od_location_counter;
     if ((nowMs - lastMs) < SENSOR_POLL_MS) return od_location_counter;
@@ -382,7 +353,14 @@ uint8_t _ChangeLocation(){
         if (sensorConfirmCount >= AUTOSTOP_CONFIRM_COUNT) {
             if((nowMs - lastValidLoc) >= LOC_ANN_CD){
               if(od_location_counter < LOC_ANN_MAX_COUNT){
-                newLocation =  od_location_counter + 1;
+                if(autostopArmed){
+                  newLocation = LOC_ANN2_AUTOSTOP;
+                }else if(tractionArmed){
+                  newLocation = LOC_ANN6_TCN;
+                }else{
+                  newLocation = od_location_counter + 1;
+                }
+                
               }else{
                 newLocation = 0;
               }
@@ -420,9 +398,10 @@ static void _HandleLocationAnnoucement() {
     uint8_t newLocation = _ChangeLocation();
     
     
+    
     if(od_true_speed<=0 && standstillFlag){
-        executeSDOWrite(NODE_ID, AUDIO_ID, 0x1051, 0x00, sizeof(od_location_counter), &od_location_counter);
-        executeSDOWrite(NODE_ID, DRIVER_ID, 0x1051, 0x00, sizeof(od_location_counter), &od_location_counter);
+        executeSDOWrite(NODE_ID, AUDIO_ID,  OD_LOCATION_COUNTER_INDEX, OD_LOCATION_COUNTER_SUBINDEX, sizeof(od_location_counter), &od_location_counter);
+        executeSDOWrite(NODE_ID, DRIVER_ID, OD_LOCATION_COUNTER_INDEX, OD_LOCATION_COUNTER_SUBINDEX, sizeof(od_location_counter), &od_location_counter);
         standstillFlag = LOW;
     }
 
@@ -432,15 +411,15 @@ static void _HandleLocationAnnoucement() {
         Serial.println(od_location_counter);
         locAnnouncePrefs.putUChar("Location", od_location_counter);
         switch (od_location_counter) {
-            case 1: _SendPassing()   ; break; //Point 1
+            case LOC_ANN1_START: _SendPassing()   ; break; //Point 1
             //Have traction markers here in circuit
-            case 4: _SendPassing()   ; break; //Point 2
-            case 5: _SendStandStill(); break; //Point 3
-            case 6: _SendStandStill(); break; //Point 4
-            case 7: _SendPassing()   ; break; //Point 5
-            case 8: _SendStandStill(); break; //Point 6
-            case 9: _SendPassing()   ; break;
-            case 10:_SendStandStill(); break;
+            case LOC_ANN2_AUTOSTOP: _SendPassing()   ; break; //Point 2
+            case LOC_ANN3_COMFORT: _SendStandStill(); break; //Point 3
+            case LOC_ANN4_COMFORT_END: _SendStandStill(); break; //Point 4
+            case LOC_ANN5_HAVEN: _SendPassing()   ; break; //Point 5
+            case LOC_ANN6_TCN: _SendStandStill(); break; //Point 6
+            case LOC_ANN7_TCN_END: _SendPassing()   ; break;
+            case LOC_ANN8_END:_SendStandStill(); break;
             default: break;  // fail-safe
         }   
     }
@@ -488,7 +467,7 @@ void OperationalMode(void) {
     // Release latch if Node 3 has written a new challenge mode that is not
     // autostop. od_challenge_mode is updated in the background by the CAN task
     // whenever Node 3 SDO-writes it.
-    if (autostopLatched && (od_challenge_mode != AUTOSTOP_CHALLENGE_VALUE)) {
+    if (autostopLatched && (od_challenge_mode != CHALLENGE_AUTO_STOP)) {
         Serial.println("[Autostop] INFO: Challenge mode changed — latch released.");
         autostopLatched       = false;
         od_autostop_detection = 0;
@@ -499,7 +478,7 @@ void OperationalMode(void) {
 
     _HandleLocationAnnoucement();
 
-    if (od_challenge_mode == AUTOSTOP_CHALLENGE_VALUE) {
+    if (od_challenge_mode == CHALLENGE_AUTO_STOP) {
         _HandleAutostop();
     }
 }
@@ -533,22 +512,19 @@ void setup() {
     // --- Register OD entries ---
     // od_challenge_mode: written by Node 3 (driver controls) via SDO on switch
     // change. Registered as RW so the CAN library accepts incoming SDO writes.
-    registerODEntry(OD_INDEX_CHALLENGE_MODE, OD_SUBINDEX_CHALLENGE_MODE,
+    registerODEntry(OD_CHALLENGE_MODE_INDEX, OD_CHALLENGE_MODE_SUBINDEX,
                     2, sizeof(od_challenge_mode), &od_challenge_mode);
 
     // od_autostop_detection: written by this node; readable by others via SDO.
-    registerODEntry(OD_INDEX_AUTOSTOP_DET, OD_SUBINDEX_AUTOSTOP_DET,
+    registerODEntry(OD_AUTOSTOP_DETECTION_INDEX, OD_AUTOSTOP_DETECTION_SUBINDEX,
                     2, sizeof(od_autostop_detection), &od_autostop_detection);
 
-    registerODEntry(0x1051, 0x00, 2, sizeof(od_location_counter), &od_location_counter);
+    registerODEntry(OD_LOCATION_COUNTER_INDEX, OD_LOCATION_COUNTER_SUBINDEX, 2, sizeof(od_location_counter), &od_location_counter);
 
-    registerODEntry(0x606C, 0x00, 2, sizeof(od_true_speed), &od_true_speed);
+    registerODEntry(OD_TRUE_SPEED_INDEX, OD_TRUE_SPEED_SUBINDEX, 2, sizeof(od_true_speed), &od_true_speed);
     //map speed rpdo
-    configureRPDO(0, 0x181, 255, 0);
-    PdoMapEntry rpdo_entries[] = {
-        {0x606C, 0x00, 32}  // od_true_speed
-    };
-    mapRPDO(0, rpdo_entries, 1);
+    configureRPDO(0, PDO_TS_COB_ID, 255, 0);
+    mapRPDO(0, PDO_TS_MAP, PDO_TS_COUNT);
 
     // --- Set pin modes ---
     // Sensor pins are analog inputs. analogRead does not require pinMode but

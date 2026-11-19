@@ -17,8 +17,16 @@
 #ifndef MREX_H
 #define MREX_H
 
+// TODO - EMCY codes?
+
 #include <Arduino.h>
 #include <CAN_MREx.h>
+
+// CAN Function Codes
+#define TPDO1_FUNCODE 0x180
+#define TPDO2_FUNCODE 0x280
+#define TPDO3_FUNCODE 0x380
+#define TPDO4_FUNCODE 0x480
 
 // Node IDs
 #define MOTOR_ID 0x01
@@ -32,38 +40,40 @@
 #define LCD_ID 0x09
 
 // Object Dictionaries
-uint16_t od_regen_brake;
+uint16_t od_regen_brake = 0;
 #define OD_REGEN_BRAKE_INDEX 0x3012
 #define OD_REGEN_BRAKE_SUBINDEX 0x00
 
+// TODO - check these and od_service_brake_mc and od_service_brake_dc values (the interpretation changed in the node files a few times during comp week)
+// then update Brakes.ino, controller.h, driver_controller.ino etc. to use these values
 enum ODServiceBrake : uint8_t {
     NOT_BRAKING         = 1,
     BRAKING             = 0
 };
 
-uint8_t od_service_brake_mc;
+#define ODServiceBrakeMC ODServiceBrake
+uint8_t od_service_brake_mc = 1;
 #define OD_SERVICE_BRAKE_MC_INDEX 0x3012
 #define OD_SERVICE_BRAKE_MC_SUBINDEX 0x01
-#define ODServiceBrakeMC ODServiceBrake
 
-uint8_t od_service_brake_dc;
+#define ODServiceBrakeDC ODServiceBrake
+uint8_t od_service_brake_dc = 0;
 #define OD_SERVICE_BRAKE_DC_INDEX 0x3012
 #define OD_SERVICE_BRAKE_DC_SUBINDEX 0x02
-#define ODServiceBrakeDC ODServiceBrake
 
 // missing size and signed interpretation in registry
 #define OD_BRAKE_THRESHOLD_INDEX 0x3012
 #define OD_BRAKE_THRESHOLD_SUBINDEX 0x03
 
-uint16_t od_motor_command;
+uint16_t od_motor_command = 0;
 #define OD_MOTOR_COMMAND_INDEX 0x606A
 #define OD_MOTOR_COMMAND_SUBINDEX 0x00
 
-uint32_t od_true_speed;
+uint32_t od_true_speed = 0;
 #define OD_TRUE_SPEED_INDEX 0x606C
 #define OD_TRUE_SPEED_SUBINDEX 0x00
 
-// missing interpretation in registry
+uint32_t od_tractive_effort = 0;
 #define OD_TRACTIVE_EFFORT_INDEX 0x606E
 #define OD_TRACTIVE_EFFORT_SUBINDEX 0x00
 
@@ -128,29 +138,26 @@ float_t od_kd_5;
 #define OD_KD_5_SUBINDEX 0x0E
 
 // for NMTs, no index and subindex in registry
-uint8_t od_operation_mode;
 enum ODOperatingMode : uint8_t {
     MODE_STOPPED        = 0x02,
     MODE_PREOP          = 0x80,
     MODE_OPERATIONAL    = 0x01
 };
+uint8_t od_operation_mode;
 
-uint8_t od_direction_mode;
-#define OD_DIRECTION_MODE_INDEX 0x6060
-#define OD_DIRECTION_MODE_SUBINDEX 0x00
 enum ODDirectionMode : uint8_t {
     REVERSE_MODE        = 1,
     NEUTRAL_MODE        = 2,
     FORWARD_MODE        = 3
 };
+uint8_t od_direction_mode = 0;
+#define OD_DIRECTION_MODE_INDEX 0x6060
+#define OD_DIRECTION_MODE_SUBINDEX 0x00
 
-uint8_t od_condition_mode;
+uint8_t od_condition_mode = 0;
 #define OD_CONDITION_MODE_INDEX 0x6061
 #define OD_CONDITION_MODE_SUBINDEX 0x00
 
-uint8_t od_challenge_mode;
-#define OD_CHALLENGE_MODE_INDEX 0x6062
-#define OD_CHALLENGE_MODE_SUBINDEX 0x00
 enum ODChallengeMode : uint8_t {
     CHALLENGE_THROTTLE          = 1,
     CHALLENGE_SPEED_CONTROL     = 2,
@@ -158,57 +165,99 @@ enum ODChallengeMode : uint8_t {
     CHALLENGE_ENERGY_RECOVERY   = 4,
     CHALLENGE_TRACTION          = 5
 };
+uint8_t od_challenge_mode = CHALLENGE_THROTTLE;
+#define OD_CHALLENGE_MODE_INDEX 0x6062
+#define OD_CHALLENGE_MODE_SUBINDEX 0x00
 
-uint8_t od_horn_toggle;
-#define OD_HORN_TOGGLE_INDEX 0x6065
-#define OD_HORN_TOGGLE_SUBINDEX 0x00
 enum ODHornToggle : uint8_t {
     PLAY_SOUND      = 1,
     HORN_DEFAULT    = 0
 };
+uint8_t od_horn_toggle = HORN_DEFAULT;
+#define OD_HORN_TOGGLE_INDEX 0x6065
+#define OD_HORN_TOGGLE_SUBINDEX 0x00
 
-uint16_t od_temperature_front;
+uint16_t od_temperature_front = 0;
 #define OD_TEMPERATURE_FRONT_INDEX 0x1004
 #define OD_TEMPERATURE_FRONT_SUBINDEX 0x00
 
-uint16_t od_temperature_rear;
+uint16_t od_temperature_rear = 0;
 #define OD_TEMPERATURE_REAR_INDEX 0x1004
 #define OD_TEMPERATURE_REAR_SUBINDEX 0x01
 
-uint8_t od_autostop_detection;
+// TODO - interpretation enum (driver_controller.ino, autostop_detector.ino)
+uint8_t od_autostop_detection = 0;
 #define OD_AUTOSTOP_DETECTION_INDEX 0x1050
 #define OD_AUTOSTOP_DETECTION_SUBINDEX 0x00
 
-uint32_t od_current;
+uint32_t od_current = 0;
 #define OD_CURRENT_INDEX 0x2000
 #define OD_CURRENT_SUBINDEX 0x00
 
-uint16_t od_voltage;
+uint16_t od_voltage = 0; // voltage always positive 
 #define OD_VOLTAGE_INDEX 0x2000
 #define OD_VOLTAGE_SUBINDEX 0x01
 
-uint16_t od_soc;
+uint16_t od_soc = 0; // 0-100%. +/- 0.1%. If the SOC is 88.3% it is sent as 883 so 16 bits enough.
 #define OD_SOC_INDEX 0x2000
 #define OD_SOC_SUBINDEX 0x02
 
-uint32_t od_power;
+uint32_t od_power = 0; // Instantenous Power
 #define OD_POWER_INDEX 0x2000
 #define OD_POWER_SUBINDEX 0x03
 
-uint32_t od_recovered_energy;
+uint32_t od_recovered_energy = 0;
 #define OD_RECOVERED_ENERGY_INDEX 0x2000
 #define OD_RECOVERED_ENERGY_SUBINDEX 0x04
 
+int32_t od_cumulative_energy = 0;
+#define OD_CUMULATIVE_ENERGY_INDEX 0x2000
+#define OD_CUMULATIVE_ENERGY_SUBINDEX 0x05
+
+uint8_t od_location_counter = 0;
+#define OD_LOCATION_COUNTER_INDEX 0x1051
+#define OD_LOCATION_COUNTER_SUBINDEX 0x00
+
 // PDO Maps
-#define PDO_TS_COB_ID 0x180 + MOTOR_ID
+#define PDO_TS_COB_ID TPDO1_FUNCODE + MOTOR_ID
 PdoMapEntry PDO_TS_MAP[] = {
     {OD_TRUE_SPEED_INDEX, OD_TRUE_SPEED_SUBINDEX, 8*sizeof(od_true_speed)}
 };
+#define PDO_TS_COUNT 1
 
-#define PDO_RGB_MTCM_COB_ID 0x180 + DRIVER_ID
+#define PDO_RGB_MTCM_COB_ID TPDO1_FUNCODE + DRIVER_ID
 PdoMapEntry PDO_RGB_MTCM_MAP[] = {
     {OD_REGEN_BRAKE_INDEX, OD_REGEN_BRAKE_SUBINDEX, 8*sizeof(od_regen_brake)},
     {OD_MOTOR_COMMAND_INDEX, OD_MOTOR_COMMAND_SUBINDEX, 8*sizeof(od_motor_command)}
 };
+#define PDO_RGB_MTCM_COUNT 2
+
+#define PDO_CE_COB_ID TPDO3_FUNCODE + BATTERY_ID
+PdoMapEntry PDO_CE_MAP[] = {
+    {OD_CUMULATIVE_ENERGY_INDEX, OD_CUMULATIVE_ENERGY_SUBINDEX, 8*sizeof(od_cumulative_energy)}
+};
+#define PDO_CE_COUNT 1
+
+#define PDO_IVQ_COB_ID TPDO1_FUNCODE + BATTERY_ID
+PdoMapEntry PDO_IVQ_MAP[] = {
+    {OD_CURRENT_INDEX, OD_CURRENT_SUBINDEX, 8*sizeof(od_current)},
+    {OD_VOLTAGE_INDEX, OD_VOLTAGE_SUBINDEX, 8*sizeof(od_voltage)},
+    {OD_SOC_INDEX, OD_SOC_SUBINDEX, 8*sizeof(od_soc)},
+};
+#define PDO_IVQ_COUNT 3
+
+#define PDO_PWR_RE_COB_ID TPDO2_FUNCODE + BATTERY_ID
+PdoMapEntry PDO_PWR_RE_MAP[] = {
+    {OD_POWER_INDEX, OD_POWER_SUBINDEX, 8*sizeof(od_power)},
+    {OD_RECOVERED_ENERGY_INDEX, OD_RECOVERED_ENERGY_SUBINDEX, 8*sizeof(od_recovered_energy)}
+};
+#define PDO_PWR_RE_COUNT 2
+
+#define PDO_TEMP_COB_ID TPDO1_FUNCODE + LIGHTS_ID
+PdoMapEntry PDO_TEMP_MAP[] = {
+    {OD_TEMPERATURE_FRONT_INDEX, OD_TEMPERATURE_FRONT_SUBINDEX, 8*sizeof(od_temperature_front)},
+    {OD_TEMPERATURE_REAR_INDEX, OD_TEMPERATURE_REAR_SUBINDEX, 8*sizeof(od_temperature_rear)}
+};
+#define PDO_TEMP_COUNT 2
 
 #endif // MREX_H

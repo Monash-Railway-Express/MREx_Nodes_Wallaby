@@ -10,9 +10,9 @@
  * @author Sean Larkin
  * @author Nhan Nguyen
  *
- * @date 28/04/2026
+ * @date 17/10/2026
  *
- * @version 2.1.0
+ * @version 2.1.1
  *
  * @organisation MREX
  *
@@ -29,49 +29,11 @@
 #include "../../../shared/DualSerial/DualSerial.cpp"
 
 
-
-// =============================================================================
-// OD Variable Definitions
-// =============================================================================
-
-
-
-// OD 0x606C:00 – Actual vehicle speed in km/h (0–UINT32_MAX). RW. Mapped to TPDO0.
-uint32_t od_true_speed = 0;
-
-// OD 0x3012:00 – Regen brake request (0–1023). RW. Mapped to RPDO0.
-uint16_t od_regen_brake = 0;
-
-// OD 0x3012:01 – Service brake active flag (0 = "Braking", 1 = "Not Braking"). RW. Mapped to SDO.
-uint8_t od_service_brake_mc = 0;
-
-// OD 0x606A:00 – Raw motor command (0–255). RW. Mapped to RPDO0.
-uint16_t od_motor_command = 0;
-
-// OD 0x6061:00 – Condition, 1-5 1 being best track conditions 5 being worst track conditions (Not implemented yet)
-uint8_t od_condition_mode = 0;
-
-// OD 0x6060:00 – Direction mode mirror. RW. Mapped to RPDO0.
-uint8_t od_direction_mode = 0;
-
-// OD 0x6062:00 – Challenge mode selector (1=Normal, 2=Speed, 3=AutoStop,
-//                4=EnergyRecovery, 5=Traction). RW. Mapped to RPDO0.
-uint8_t od_challenge_mode = 1;
-uint8_t prev_challenge_mode = 0;
-
-// OD 0x2000:04 – Recovered energy from battery node (Wh). Read-only. Mapped to RPDO1.
-uint32_t od_recovered_energy = 0;
-
-// OD 0x1050:00 - Autostop lineside marker detection. unsigned 0 or 1, edge=detected
-uint8_t od_autostop_detection = 0;
-
-uint32_t od_current_power = 0;
-
-int cumulative_energy = 0;
-
 // =============================================================================
 // Global Variables
 // =============================================================================
+
+uint8_t prev_challenge_mode = 0; // od_challenge_mode = 1 on start
 
 bool reset_energy_recovery = false; // this is to reset the energy recovery challenge
 
@@ -140,75 +102,64 @@ void setup() {
 
     pinMode(REVERSING_CONTACTOR, OUTPUT);
     pinMode(ISOLATING_RELAY, OUTPUT);
-    pinMode(BRAKE_SWITCH, OUTPUT);
+    pinMode(REGEN_BRAKE_SWITCH, OUTPUT);
 
     // --- Register OD entries ---
-    registerODEntry(0x606C, 0x00, 2, sizeof(od_true_speed), &od_true_speed);                // TPDO - 32bit
-    registerODEntry(0x3012, 0x00, 2, sizeof(od_regen_brake), &od_regen_brake);              // RPDO - 16bit
-    registerODEntry(0x3012, 0x01, 2, sizeof(od_service_brake_mc), &od_service_brake_mc);    // SDO - 8bit
-    registerODEntry(0x606A, 0x00, 2, sizeof(od_motor_command), &od_motor_command);          // RPDO - 16bit
-    registerODEntry(0x6061, 0x00, 2, sizeof(od_condition_mode), &od_condition_mode);        // SDO - 8bit
-    registerODEntry(0x6060, 0x00, 2, sizeof(od_direction_mode), &od_direction_mode);        // SDO - 8bit
-    registerODEntry(0x6062, 0x00, 2, sizeof(od_challenge_mode), &od_challenge_mode);        // SDO - 8bit
-    registerODEntry(0x2000, 0x03, 2, sizeof(od_current_power), &od_current_power);    // RPDO - 32bit
-    registerODEntry(0x2000, 0x04, 2, sizeof(od_recovered_energy), &od_recovered_energy);    // RPDO - 32bit
-    registerODEntry(0x1050, 0x00, 2, sizeof(od_autostop_detection), &od_autostop_detection);    // SDO - 8bit
-    registerODEntry(0x2000, 0x05, 2, sizeof(cumulative_energy), &cumulative_energy);   
+    registerODEntry(OD_TRUE_SPEED_INDEX,            OD_TRUE_SPEED_SUBINDEX,         2, sizeof(od_true_speed),           &od_true_speed);                // TPDO - 32bit
+    registerODEntry(OD_REGEN_BRAKE_INDEX,           OD_REGEN_BRAKE_SUBINDEX,        2, sizeof(od_regen_brake),          &od_regen_brake);              // RPDO - 16bit
+    registerODEntry(OD_SERVICE_BRAKE_MC_INDEX,      OD_SERVICE_BRAKE_MC_SUBINDEX,   2, sizeof(od_service_brake_mc),     &od_service_brake_mc);    // SDO - 8bit
+    registerODEntry(OD_MOTOR_COMMAND_INDEX,         OD_MOTOR_COMMAND_SUBINDEX,      2, sizeof(od_motor_command),        &od_motor_command);          // RPDO - 16bit
+    registerODEntry(OD_CONDITION_MODE_INDEX,        OD_CONDITION_MODE_SUBINDEX,     2, sizeof(od_condition_mode),       &od_condition_mode);        // SDO - 8bit
+    registerODEntry(OD_DIRECTION_MODE_INDEX,        OD_DIRECTION_MODE_SUBINDEX,     2, sizeof(od_direction_mode),       &od_direction_mode);        // SDO - 8bit
+    registerODEntry(OD_CHALLENGE_MODE_INDEX,        OD_CHALLENGE_MODE_SUBINDEX,     2, sizeof(od_challenge_mode),       &od_challenge_mode);        // SDO - 8bit
+    registerODEntry(OD_POWER_INDEX,                 OD_POWER_SUBINDEX,              2, sizeof(od_power),                &od_power);    // RPDO - 32bit
+    registerODEntry(OD_RECOVERED_ENERGY_INDEX,      OD_RECOVERED_ENERGY_SUBINDEX,   2, sizeof(od_recovered_energy),     &od_recovered_energy);    // RPDO - 32bit
+    registerODEntry(OD_AUTOSTOP_DETECTION_INDEX,    OD_AUTOSTOP_DETECTION_SUBINDEX, 2, sizeof(od_autostop_detection),   &od_autostop_detection);    // SDO - 8bit
+    registerODEntry(OD_CUMULATIVE_ENERGY_INDEX,     OD_CUMULATIVE_ENERGY_SUBINDEX,  2, sizeof(od_cumulative_energy),    &od_cumulative_energy);   
     
     
     // When adding a new pair, ensure to update numFloatPairs
     // Assign values here rather than statically above as floats do not initialise properly otherwise
-    floatPairs[0] = {"od_kp_1", 0.016442f, 0x60F6, 0x00};
-    floatPairs[1] = {"od_ki_1", 1.7177f, 0x60F6, 0x01};
-    floatPairs[2] = {"od_kd_1", 0.3f, 0x60F6, 0x02};
-    floatPairs[3] = {"od_kp_2", 0.4f, 0x60F6, 0x03};
-    floatPairs[4] = {"od_ki_2", 0.5f, 0x60F6, 0x04};
-    floatPairs[5] = {"od_kd_2", 0.6f, 0x60F6, 0x05};
-    floatPairs[6] = {"od_kp_3", 0.7f, 0x60F6, 0x06};
-    floatPairs[7] = {"od_ki_3", 0.8f, 0x60F6, 0x07};
-    floatPairs[8] = {"od_kd_3", 0.9f, 0x60F6, 0x08};
-    floatPairs[9] = {"od_kp_4", 0.0f, 0x60F6, 0x09};
-    floatPairs[10] = {"od_ki_4", 0.1f, 0x60F6, 0x0A};
-    floatPairs[11] = {"od_kd_4", 0.2f, 0x60F6, 0x0B};
-    floatPairs[12] = {"od_kp_5", 0.3f, 0x60F6, 0x0C};
-    floatPairs[13] = {"od_ki_5", 0.4f, 0x60F6, 0x0D};
-    floatPairs[14] = {"od_kd_5", 0.5f, 0x60F6, 0x0E};
+    floatPairs[0] = {"od_kp_1", 0.016442f, OD_KP_1_INDEX, OD_KP_1_SUBINDEX};
+    floatPairs[1] = {"od_ki_1", 1.7177f, OD_KI_1_INDEX, OD_KI_1_SUBINDEX};
+    floatPairs[2] = {"od_kd_1", 0.3f, OD_KD_1_INDEX, OD_KD_1_SUBINDEX};
+    floatPairs[3] = {"od_kp_2", 0.4f, OD_KP_2_INDEX, OD_KP_2_SUBINDEX};
+    floatPairs[4] = {"od_ki_2", 0.5f, OD_KI_2_INDEX, OD_KI_2_SUBINDEX};
+    floatPairs[5] = {"od_kd_2", 0.6f, OD_KD_2_INDEX, OD_KD_2_SUBINDEX};
+    floatPairs[6] = {"od_kp_3", 0.7f, OD_KP_3_INDEX, OD_KP_3_SUBINDEX};
+    floatPairs[7] = {"od_ki_3", 0.8f, OD_KI_3_INDEX, OD_KI_3_SUBINDEX};
+    floatPairs[8] = {"od_kd_3", 0.9f, OD_KD_3_INDEX, OD_KD_3_SUBINDEX};
+    floatPairs[9] = {"od_kp_4", 0.0f, OD_KP_4_INDEX, OD_KP_4_SUBINDEX};
+    floatPairs[10] = {"od_ki_4", 0.1f, OD_KI_4_INDEX, OD_KI_4_SUBINDEX};
+    floatPairs[11] = {"od_kd_4", 0.2f, OD_KD_4_INDEX, OD_KD_4_SUBINDEX};
+    floatPairs[12] = {"od_kp_5", 0.3f, OD_KP_5_INDEX, OD_KP_5_SUBINDEX};
+    floatPairs[13] = {"od_ki_5", 0.4f, OD_KI_5_INDEX, OD_KI_5_SUBINDEX};
+    floatPairs[14] = {"od_kd_5", 0.5f, OD_KD_5_INDEX, OD_KD_5_SUBINDEX};
     for (int i = 0; i < numFloatPairs; i++) {
         // Assigning floatPairs[i] to a variable first does not work to update floatPairs[i].value on SDO writes
         registerODEntry(floatPairs[i].index, floatPairs[i].subindex, 2, sizeof(floatPairs[i].value), &(floatPairs[i].value)); // SDO
     }
 
     // --- Register TPDOs ---
-    configureTPDO(0, 0x180 + MOTOR_ID, 255, 100, 100);
-    PdoMapEntry tpdo_entries[] = {
-        {0x606C, 0x00, 32}  // od_true_speed
-    };
-    mapTPDO(0, tpdo_entries, 1);
+    // od_true_speed
+    configureTPDO(0, PDO_TS_COB_ID, 255, 100, 100);
+    mapTPDO(0, PDO_TS_MAP, PDO_TS_COUNT);
 
     // --- Register RPDOs ---
-    configureRPDO(0, 0x180 + DRIVER_ID, 255, 0);
-    PdoMapEntry rpdo_entries[] = {
-        {0x3012, 0x00, 16},  // od_regen_brake
-        {0x606A, 0x00, 16}   // od_motor_command
-    };
-    mapRPDO(0, rpdo_entries, 2);
+    // od_regen_brake 
+    configureRPDO(0, PDO_RGB_MTCM_COB_ID, 255, 0);
+    mapRPDO(0, PDO_RGB_MTCM_MAP, PDO_RGB_MTCM_COUNT);
 
-    configureRPDO(2, 0x380 + BATTERY_ID, 255, 0);
-    PdoMapEntry rpdo2_entries[] = {
-        {0x2000, 0x05, 32},  // cumulative_energy
-    };
-    mapRPDO(2, rpdo2_entries, 1);
+    // od_cumulative_energy
+    configureRPDO(2, PDO_CE_COB_ID, 255, 0);
+    mapRPDO(2, PDO_CE_MAP, PDO_CE_COUNT);
 
     /**
     * TODO
     */
-    configureRPDO(1, 0x280 + BATTERY_ID, 255, 0);
-
-    PdoMapEntry rpdo1_entries[] = {
-        {0x2000, 0x03, 32},  // power_can       — aligns bytes 0-3
-        {0x2000, 0x04, 32}   // recovered_energy_can — now correctly at bytes 4-7
-    };
-    mapRPDO(1, rpdo1_entries, 2);
+    //
+    configureRPDO(1, PDO_PWR_RE_COB_ID, 255, 0);
+    mapRPDO(1, PDO_PWR_RE_MAP, PDO_PWR_RE_COUNT);
 }
 
 
@@ -238,9 +189,9 @@ void loop() {
  * @brief Stopped state — zero all outputs, reset integrator and put preferences to NVM.
  */
 void StoppedMode() {
-    WriteDAC(THROTTLE_CHANNEL, uint16_t(motor_dac * over_speed_damping));
+    WriteDAC(THROTTLE_CHANNEL, 0);
     WriteDAC(REGEN_CHANNEL, 0);
-    digitalWrite(BRAKE_SWITCH, LOW);
+    digitalWrite(REGEN_BRAKE_SWITCH, REGEN_OFF);
     integrator = 0.0f;
     PutPreferences(); // we need to add a params dirty od entry so we only update these when they change
 }
@@ -253,9 +204,9 @@ void StoppedMode() {
  * Mode 1 = reverse, 2 = neutral (contactor off), 3 = forward.
  */
 void PreOpMode() {
-    WriteDAC(THROTTLE_CHANNEL, uint16_t(motor_dac * over_speed_damping));
+    WriteDAC(THROTTLE_CHANNEL, 0);
     WriteDAC(REGEN_CHANNEL, 0);
-    digitalWrite(BRAKE_SWITCH, LOW);
+    digitalWrite(REGEN_BRAKE_SWITCH, REGEN_OFF);
 
 
     integrator = 0.0f;
@@ -266,7 +217,7 @@ void PreOpMode() {
             DualSerial.println("[PreOp] Direction: Reverse");
             break;
         case NEUTRAL_MODE:  // Neutral — open contactor
-            digitalWrite(REVERSING_CONTACTOR, LOW);
+            digitalWrite(REVERSING_CONTACTOR, LOW); // forward
             DualSerial.println("[PreOp] Direction: Neutral");
             break;
         case FORWARD_MODE:  // Forward
@@ -274,7 +225,7 @@ void PreOpMode() {
             DualSerial.println("[PreOp] Direction: Forward");
             break;
         default:  // Unknown — fail safe to neutral
-            digitalWrite(REVERSING_CONTACTOR, LOW);
+            digitalWrite(REVERSING_CONTACTOR, LOW); // forward
             DualSerial.print("[PreOp] Unknown direction mode: ");
             DualSerial.println(od_direction_mode);
             break;
@@ -292,9 +243,31 @@ void OperationalMode() {
     // Accumulate total pulses for distance tracking
     total_pulse_accum += (int32_t)pulse_count;              // adds value to accumulated pulses
 
+    // Rolling window for reported speed. A single 10ms loop only resolves one
+    // encoder pulse = ~1.56 km/h, so averaging over a longer window is needed
+    // for a usable display reading.
+    static int16_t  win_pulses[SPEED_WINDOW_SAMPLES] = {0};
+    static uint16_t win_ms[SPEED_WINDOW_SAMPLES]     = {0};
+    static uint8_t  win_idx       = 0;
+    static int32_t  win_pulse_sum = 0;
+    static uint32_t win_ms_sum    = 0;
+
+    uint16_t loop_ms = (uint16_t)(current_millis - previous_millis);
+    win_pulse_sum += pulse_count - win_pulses[win_idx];
+    win_ms_sum    += loop_ms     - win_ms[win_idx];
+    win_pulses[win_idx] = pulse_count;
+    win_ms[win_idx]     = loop_ms;
+    win_idx = (win_idx + 1) % SPEED_WINDOW_SAMPLES;
+
     float speed_kmh = ReadSpeedKMH(previous_millis);        // clears counter here
     previous_millis = current_millis;
-    od_true_speed   = (uint32_t)(speed_kmh*10);
+
+    float reported_kmh = 0.0f;
+    if (win_ms_sum > 0) {
+        float meters = (win_pulse_sum / PULSES_PER_REV) * WHEEL_CIRCUMFERENCE_M;
+        reported_kmh = (meters / (win_ms_sum / 1000.0f)) * 3.6f;
+    }
+    od_true_speed   = (uint32_t)(reported_kmh*10 + 0.5f);   // x10 scaled
 
 
     // Detect mode transitions
@@ -337,27 +310,18 @@ void OperationalMode() {
 
     prev_challenge_mode = od_challenge_mode;
 
-    // // Hard speed cap
-    // if (speed_kmh > MAX_SPEED_KMH) {
-    //     WriteDAC(THROTTLE_CHANNEL, uint16_t(motor_dac * over_speed_damping));
-    //     integrator = 0.0f;
-    //     // sendEMCY(1, MOTOR_ID, 0x00510);     // send minor emergency - TODO: DECIDE ON PROPER ERROR CODE
-    //     DualSerial.println("[OperationalMode] Speed cap exceeded — throttle cut.");
-    //     return;
-    // }
-
     limit_speed(speed_kmh, MAX_SPEED_KMH);
 
 }
 
-void limit_speed(float current_speed, int max_speed){
+void limit_speed(float current_speed, float max_speed){
     
     //accesses global variables, motor_dac and brake_dac
     float damping_factor = 0.999;
     if(current_speed > max_speed){
         over_speed_damping = over_speed_damping * damping_factor;
     } else {
-        over_speed_damping = over_speed_damping / damping_factor;
+        over_speed_damping = over_speed_damping / (damping_factor*damping_factor); // divide ~0.998
     }
     
     if(over_speed_damping > 1){
@@ -375,13 +339,16 @@ void limit_speed(float current_speed, int max_speed){
  */
 void OnChallengeModeExit(uint8_t old_mode) {
     if (old_mode == CHALLENGE_AUTO_STOP) {
-        SetServiceBrake(false);   // release
-        new_autostop_instance = true;
+        SetServiceBrake(1);   // release
+        new_autostop_instance = 1;
+        pulse_start       = 0;
+        total_pulse_accum = 0;
+
     }
     if (old_mode == CHALLENGE_ENERGY_RECOVERY) {
         digitalWrite(ISOLATING_RELAY, LOW);
-        reset_energy_recovery = true;
-        SetServiceBrake(false);   // release
+        reset_energy_recovery = 1;
+        SetServiceBrake(1);   // release
     }
 }
 
@@ -410,37 +377,18 @@ void OnChallengeModeEnter(uint8_t new_mode) {
  * @param speed_kmh Current measured speed in km/h.
  */
 void ThrottleControl(float speed_kmh) {
-    motor_dac = 0;
-    brake_dac = 0;
-
-    // if (od_motor_command > 0 && od_regen_brake <= 0) {
-    //     motor_dac = od_motor_command;   // full 10-bit range
-    //     brake_dac = 0;
-    // }
-    // else if (od_motor_command > 0 && od_regen_brake > 0) {
-    //     motor_dac = 0;
-    //     brake_dac = od_regen_brake;
-    // }
-    // else if (od_motor_command <= 0 && od_regen_brake > 0) {
-    //     motor_dac = 0;
-    //     brake_dac = od_regen_brake;
-    // }
-    // else {
-    //     motor_dac = 0;
-    //     brake_dac = 0;
-    // }
+    motor_dac = od_motor_command;
+    brake_dac = od_regen_brake;
 
     // Write to Throttle and Regen DACs
-    WriteDAC(THROTTLE_CHANNEL, uint16_t(od_motor_command*over_speed_damping));
-    WriteDAC(REGEN_CHANNEL, od_regen_brake);
-    if(od_regen_brake > 0){
-        digitalWrite(BRAKE_SWITCH, HIGH);
+    WriteDAC(THROTTLE_CHANNEL, uint16_t(motor_dac*over_speed_damping));
+    WriteDAC(REGEN_CHANNEL, brake_dac);
+    if(brake_dac > 0){
+        digitalWrite(REGEN_BRAKE_SWITCH, REGEN_ON);
     } else {
-        digitalWrite(BRAKE_SWITCH, LOW);
+        digitalWrite(REGEN_BRAKE_SWITCH, REGEN_OFF);
     }
 
-    DualSerial.print("[SpeedControl] CMD: ");
-    DualSerial.print(od_motor_command);
     DualSerial.print(" | Speed: ");
     DualSerial.print(speed_kmh);
     DualSerial.print(" | Motor DAC: ");
@@ -463,6 +411,8 @@ void SpeedControl(float speed_kmh) {
     motor_dac = 0;
     brake_dac = 0;
 
+    float speed_setpoint = ((float)od_motor_command / (float)DAC_MAX) * MAX_SPEED_KMH;
+
     if (od_regen_brake > REGEN_BRAKE_THRESHOLD) {
         motor_dac  = 0;
         brake_dac  = od_regen_brake;
@@ -470,7 +420,6 @@ void SpeedControl(float speed_kmh) {
     } else {
         // Scale od_motor_command (0–1023) to speed setpoint (0–MAX_SPEED_KMH)
         // float speed_setpoint = ((float)od_motor_command / 1023.0f) * MAX_SPEED_KMH;
-        float speed_setpoint = ((float)od_motor_command / (float)DAC_MAX) * MAX_SPEED_KMH;
         float error = speed_setpoint - speed_kmh;
 
         // CONSTANT TRACTION MODE 1
@@ -489,22 +438,22 @@ void SpeedControl(float speed_kmh) {
         //multiplying control by 1024;
         //I think PI params were caculated for 0 to 1 output signal not 0 to 1024
         //just multiplying by 100
-        control = control * 15;
+        control = control * 25;
         if (control > DAC_MAX) control = (float)DAC_MAX;
 
         motor_dac = (uint16_t)control;
         brake_dac = 0;
     }
 
-    WriteDAC(THROTTLE_CHANNEL, uint16_t(over_speed_damping * motor_dac));
+    WriteDAC(THROTTLE_CHANNEL, motor_dac);
     WriteDAC(REGEN_CHANNEL, brake_dac);
     if(brake_dac > 0){
-        digitalWrite(BRAKE_SWITCH, HIGH);
+        digitalWrite(REGEN_BRAKE_SWITCH, REGEN_ON);
     } else {
-        digitalWrite(BRAKE_SWITCH, LOW);
+        digitalWrite(REGEN_BRAKE_SWITCH, REGEN_OFF);
     }
     
-    DualSerial.print("[SpeedControl] Setpoint: "); DualSerial.print(((float)od_motor_command / 1023.0f) * MAX_SPEED_KMH);
+    DualSerial.print("[SpeedControl] Setpoint: "); DualSerial.print(speed_setpoint);
     DualSerial.print(" | Speed: ");                DualSerial.print(speed_kmh);
     DualSerial.print(" | Motor DAC: ");            DualSerial.print(motor_dac);
     DualSerial.print(" | Brake DAC: ");            DualSerial.println(brake_dac);
@@ -535,6 +484,7 @@ void AutoStopChallenge(float speed_kmh, int32_t pulse_accum) {
             return;
         }
 
+        // Autostop marker detected od_autostop_detection == 1
         pulse_start       = pulse_accum;
         throttle_snapshot = od_motor_command;
         entered_auto_stop = true;
@@ -542,48 +492,57 @@ void AutoStopChallenge(float speed_kmh, int32_t pulse_accum) {
     }
 
     if (entered_auto_stop) {
-    int32_t pulses_since_start = pulse_accum - pulse_start;
-    float distance_m = ((float)pulses_since_start / PULSES_PER_REV) * WHEEL_CIRCUMFERENCE_M;
+        int32_t pulses_since_start = pulse_accum - pulse_start;
+        float distance_m = ((float)pulses_since_start / PULSES_PER_REV) * WHEEL_CIRCUMFERENCE_M;
 
 
 
-    // --- Zone 2: Stopped ---
-    if (speed_kmh <= 0.1f) {
-        WriteDAC(THROTTLE_CHANNEL, 0);
+        // --- Zone 2: Stopped ---
+        // if (speed_kmh <= 0.1f) {
+        //     WriteDAC(THROTTLE_CHANNEL, 0);
+        //     WriteDAC(REGEN_CHANNEL, 0);
+        //     digitalWrite(REGEN_BRAKE_SWITCH, REGEN_OFF);
+        //     integrator = 0.0f;
+        //     SetServiceBrake(true);
+        //     od_autostop_detection = 0;
+        //     entered_auto_stop     = false;
+        //     new_autostop_instance = false;
+        //     DualSerial.println("[AutoStop] Stopped — service brake applied.");
+        //     return;
+        // }
+
+        // --- Zone 3: 25m reached — full regen brake ---
+        if (distance_m >= AUTO_STOP_DISTANCE_M) {
+            integrator = 0.0f;
+            WriteDAC(THROTTLE_CHANNEL, 0);
+            WriteDAC(REGEN_CHANNEL, DAC_MAX);
+            if (od_service_brake_mc == 1){
+                od_service_brake_mc = 0;
+                executeSDOWrite(NODE_ID, BRAKES_ID, OD_SERVICE_BRAKE_MC_INDEX, OD_SERVICE_BRAKE_MC_SUBINDEX, sizeof(od_service_brake_mc), &od_service_brake_mc);
+            }
+
+            od_autostop_detection = 0;
+            entered_auto_stop     = false;
+            new_autostop_instance = false;
+
+            digitalWrite(REGEN_BRAKE_SWITCH, REGEN_ON);
+            DualSerial.print("[AutoStop] Regen braking to stop — Distance: "); DualSerial.print(distance_m);
+            DualSerial.print("m | Speed: "); DualSerial.print(speed_kmh);
+            DualSerial.print(" | Brake DAC: "); DualSerial.println(DAC_MAX);
+            return;
+        }
+
+        // --- Zone 1: Throttle taper (under 25m, still moving) ---
+        float distance_fraction = 1.0f - (distance_m / AUTO_STOP_DISTANCE_M); // distance remaining
+        if (distance_fraction < 0.0f) distance_fraction = 0.0f;
+        motor_dac = (uint16_t)(throttle_snapshot * distance_fraction);
+        WriteDAC(THROTTLE_CHANNEL, motor_dac);
         WriteDAC(REGEN_CHANNEL, 0);
-        digitalWrite(BRAKE_SWITCH, LOW);
-        integrator = 0.0f;
-        SetServiceBrake(true);
-        od_autostop_detection = 0;
-        entered_auto_stop     = false;
-        new_autostop_instance = false;
-        DualSerial.println("[AutoStop] Stopped — service brake applied.");
-        return;
-    }
-
-    // --- Zone 3: 25m reached — full regen brake ---
-    if (distance_m >= AUTO_STOP_DISTANCE_M) {
-        integrator = 0.0f;
-        WriteDAC(THROTTLE_CHANNEL, 0);
-        WriteDAC(REGEN_CHANNEL, DAC_MAX);
-        digitalWrite(BRAKE_SWITCH, HIGH);
-        DualSerial.print("[AutoStop] Coasting to stop — Distance: "); DualSerial.print(distance_m);
-        DualSerial.print("m | Speed: "); DualSerial.print(speed_kmh);
-        DualSerial.print(" | Brake DAC: "); DualSerial.println(DAC_MAX);
-        return;
-    }
-
-    // --- Zone 1: Throttle taper (under 25m, still moving) ---
-    float distance_fraction = 1.0f - (distance_m / AUTO_STOP_DISTANCE_M);
-    if (distance_fraction < 0.0f) distance_fraction = 0.0f;
-    motor_dac = (uint16_t)(throttle_snapshot * distance_fraction);
-    WriteDAC(THROTTLE_CHANNEL, motor_dac);
-    WriteDAC(REGEN_CHANNEL, 0);
-    digitalWrite(BRAKE_SWITCH, LOW);
-    DualSerial.print("[AutoStop] Tapering — Distance: "); DualSerial.print(distance_m);
-    DualSerial.print(" | Fraction: ");                    DualSerial.print(distance_fraction);
-    DualSerial.print(" | Motor DAC: ");                   DualSerial.print(motor_dac);
-    DualSerial.print(" | Speed: ");                       DualSerial.println(speed_kmh);
+        digitalWrite(REGEN_BRAKE_SWITCH, REGEN_OFF);
+        DualSerial.print("[AutoStop] Tapering — Distance: "); DualSerial.print(distance_m);
+        DualSerial.print("m | Fraction: ");                    DualSerial.print(distance_fraction);
+        DualSerial.print(" | Motor DAC: ");                   DualSerial.print(motor_dac);
+        DualSerial.print(" | Speed: ");                       DualSerial.println(speed_kmh);
     }
 }
 /**
@@ -618,171 +577,22 @@ void TractionChallenge(float speed_kmh) {
 
 
 /**
- * @brief Energy recovery challenge — measure regen energy then limit motoring to recovered amount.
+ * @brief Energy recovery challenge — limit motoring to recovered energy.
  *
  * @details
- * Phase 1: Waits for regen brake input. On first brake, snapshots od_recovered_energy
- *          as energy_brake_start. Applies regen braking, suppressing service brake.
- * Phase 2: Train comes to stop. Snapshots od_recovered_energy as energy_brake_end.
- *          Recovered energy = energy_brake_end - energy_brake_start.
- *          Holds stationary, waiting for throttle input.
- * Phase 3: On first throttle input, snapshots od_recovered_energy as energy_motor_start.
- *          Allows motoring only while energy used < energy recovered.
- *          Cuts throttle once budget is exhausted.
- * Non-blocking — uses static state variables across calls.
+ * Mode to apply to waiting and driving phase only following regeneration phase.
  *
  * @param speed_kmh Current measured speed in km/h.
  */
 void EnergyRecoveryChallenge(float speed_kmh) {
     digitalWrite(ISOLATING_RELAY, HIGH);
 
-    // Challenge phases
-    enum EnergyPhase : uint8_t {
-        PHASE_WAITING_FOR_BRAKE  = 0,
-        PHASE_BRAKING            = 1,
-        PHASE_STOPPED_IDLE       = 2,
-        PHASE_MOTORING           = 3,
-        PHASE_BUDGET_EXHAUSTED   = 4
-    };
-
-    static EnergyPhase phase             = PHASE_WAITING_FOR_BRAKE;
-    static int32_t   energy_brake_start  = 0;
-    static int32_t    energy_brake_end    = 0;
-    static int32_t    energy_motor_start  = 0;
-    static int32_t    energy_recovered    = 0;
-
-    if (reset_energy_recovery) {
-        phase             = PHASE_WAITING_FOR_BRAKE;
-        energy_brake_start = 0;
-        energy_brake_end   = 0;
-        energy_motor_start = 0;
-        energy_recovered   = 0;
-        reset_energy_recovery = false;
-        DualSerial.println("[EnergyRecovery] State reset.");
-    }
-
-    motor_dac = 0;
-    brake_dac = 0;
-
-    switch (phase) {
-
-        // ----------------------------------------------------------------
-        case PHASE_WAITING_FOR_BRAKE:
-        // Throttle control active — waiting for driver to initiate braking
-        // ----------------------------------------------------------------
-            ThrottleControl(speed_kmh);
-
-            // Transition to braking phase on first regen brake input
-            if (od_regen_brake > REGEN_BRAKE_THRESHOLD) {
-                energy_brake_start = od_recovered_energy;
-                phase              = PHASE_BRAKING;
-                DualSerial.print("[EnergyRecovery] Braking started — energy snapshot: ");
-                DualSerial.println(energy_brake_start);
-            }
-            break;
-
-        // ----------------------------------------------------------------
-        case PHASE_BRAKING:
-        // Regen braking active — suppress service brake to maximise recovery
-        // ----------------------------------------------------------------
-            motor_dac        = 0;
-            brake_dac        = od_regen_brake;
-           //od_service_brake_mc = 0;  // Suppress — keep energy in regen circuit
-
-            WriteDAC(THROTTLE_CHANNEL, 0);
-            WriteDAC(REGEN_CHANNEL, brake_dac);
-            if(od_regen_brake > 0){
-                digitalWrite(BRAKE_SWITCH, HIGH);
-            } else {
-                digitalWrite(BRAKE_SWITCH, LOW);
-            }
- 
-
-
-            // Transition to idle once train is stopped
-            if (speed_kmh <= 0.1f) {
-                energy_brake_end  = od_recovered_energy;
-                energy_recovered  = energy_brake_end - energy_brake_start;
-               //od_service_brake_mc = 1;
-                WriteDAC(THROTTLE_CHANNEL, uint16_t(motor_dac * over_speed_damping));
-                WriteDAC(REGEN_CHANNEL, 0);
-                digitalWrite(BRAKE_SWITCH, LOW);
-                phase = PHASE_STOPPED_IDLE;
-
-                DualSerial.print("[EnergyRecovery] Stopped — energy recovered: ");
-                DualSerial.print(energy_recovered);
-                DualSerial.println(" (waiting for throttle)");
-            }
-
-            DualSerial.print("[EnergyRecovery] Braking — Brake DAC: "); DualSerial.println(brake_dac);
-            break;
-
-        // ----------------------------------------------------------------
-        case PHASE_STOPPED_IDLE:
-        // Stationary — holding service brake, waiting for first throttle input
-        // ----------------------------------------------------------------
-            WriteDAC(THROTTLE_CHANNEL, uint16_t(motor_dac * over_speed_damping));
-            WriteDAC(REGEN_CHANNEL, 0);
-            digitalWrite(BRAKE_SWITCH, LOW);
-           //od_service_brake_mc = 1;
-
-            if (od_motor_command > 10) {
-                // First throttle received — snapshot energy at this moment
-                energy_motor_start = od_recovered_energy;
-               //od_service_brake_mc  = 0;
-                phase              = PHASE_MOTORING;
-                DualSerial.print("[EnergyRecovery] Throttle received — motor energy start: ");
-                DualSerial.println(energy_motor_start);
-            }
-            break;
-
-        // ----------------------------------------------------------------
-        case PHASE_MOTORING:
-        // Motoring — allow throttle only while energy used < energy recovered
-        // ----------------------------------------------------------------
-        {
-            int32_t energy_used = energy_motor_start - od_recovered_energy;
-
-            if (energy_used >= energy_recovered) {
-                WriteDAC(THROTTLE_CHANNEL, uint16_t(motor_dac * over_speed_damping));
-                WriteDAC(REGEN_CHANNEL, 0);
-                digitalWrite(BRAKE_SWITCH, LOW);
-               //od_service_brake_mc = 0;
-                phase            = PHASE_BUDGET_EXHAUSTED;
-                DualSerial.println("[EnergyRecovery] Energy budget exhausted — throttle cut.");
-                break;
-            }
-
-            // Budget remaining — raw throttle pass-through
-           //od_service_brake_mc = 0;
-            ThrottleControl(speed_kmh);
-
-            DualSerial.print("[EnergyRecovery] Used: "); DualSerial.print(energy_used);
-            DualSerial.print(" / ");                     DualSerial.print(energy_recovered);
-            DualSerial.print(" | Motor DAC: ");          DualSerial.print(motor_dac);
-            DualSerial.print(" | Brake DAC: ");          DualSerial.println(brake_dac);
-            break;
-        }
-
-        // ----------------------------------------------------------------
-        case PHASE_BUDGET_EXHAUSTED:
-        // Throttle permanently cut — challenge complete
-        // ----------------------------------------------------------------
-            digitalWrite(ISOLATING_RELAY, HIGH);
-            WriteDAC(THROTTLE_CHANNEL, 0);
-            WriteDAC(REGEN_CHANNEL, 0);
-            digitalWrite(BRAKE_SWITCH, LOW);
-           //od_service_brake_mc = 0;
-            integrator       = 0.0f;
-
-            // Reset if challenge mode is switched away and back
-            // — handled by entered flag resetting on mode change if needed
-            DualSerial.println("[EnergyRecovery] Challenge complete — budget exhausted.");
-            break;
-
-        default:
-            phase = PHASE_WAITING_FOR_BRAKE;
-            break;
+    if (od_recovered_energy > 0) {
+        ThrottleControl(speed_kmh);
+    } else {
+        WriteDAC(THROTTLE_CHANNEL, 0);
+        WriteDAC(REGEN_CHANNEL, 0);
+        digitalWrite(REGEN_BRAKE_SWITCH, REGEN_OFF);
     }
 }
 
@@ -814,7 +624,7 @@ float ReadSpeedKMH(unsigned long prev_time) {
     float rev       = count / PULSES_PER_REV;
     float meters    = rev * WHEEL_CIRCUMFERENCE_M;
     float speed_mps = meters / elapsed_s;
-    return speed_mps * 3.6f;
+    return speed_mps * 3.6f; // m/s to km/h
 }
 
 
@@ -883,9 +693,8 @@ void SetupPCNT() {
  * @brief Sets od_service_brake_mc variable as brakes engaged or unengaged
  */
 void SetServiceBrake(bool engaged) {
-    // od_service_brake_mc = engaged ? 0 : 1;   // 0 = braking, 1 = not braking
-    // uint8_t value = od_service_brake_mc;
-    // executeSDOWrite(NODE_ID, 2, 0x3012, 0x01, sizeof(value), &value);
+    od_service_brake_mc = engaged ? 1 : 0;   // 1 = braking, 0 = not braking
+    executeSDOWrite(NODE_ID, BRAKES_ID, OD_SERVICE_BRAKE_MC_INDEX, OD_SERVICE_BRAKE_MC_SUBINDEX, sizeof(od_service_brake_mc), &od_service_brake_mc);
     // // ^ check your CAN_MREx signature — adjust args to match
 }
 
