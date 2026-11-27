@@ -1,16 +1,8 @@
 /**
  * @file autostop_detector.ino
  * @brief Autostop detector node — QS18VP6LP photoelectric sensor interface and
- *        marker-triggered motor stop for the MREx autostop challenge.
- *
- * @details
- * This node (Node ID 6) reads a QS18VP6LP photoelectric sensor whose two
- * complementary voltage-divided outputs are wired to SENSOR_A_PIN (positive
- * detection, HIGH when object present) and SENSOR_B_PIN (inverse/negative
- * output, must always equal logical-NOT of A). Both outputs are checked each
- * poll cycle; if they are identical the circuit is considered faulty and a
- * minor EMCY is sent once per fault onset.
- *
+ *        marker-triggered motor stop for the MREx autostop and location annoucement challenge.
+ * 
  * Autostop trigger sequence:
  *   1. Receive od_challenge_mode from Node 3 (driver controls) via SDO write.
  *      Node 3 writes 0x6062:00 on this node whenever the operator changes the
@@ -25,8 +17,6 @@
  *   4. Latch releases when challenge mode changes away from 3 or the node
  *      leaves OPERATIONAL.
  *
- * NOTE: Hardware is ESP32-WROOM-32UE. GPIO 32 and 33 are both ADC1 channels
- * (CH4 and CH5) — reliable analog inputs with no peripheral conflicts.
  *
  * @author Patrick McCarthy
  * @author Audrey Tasevski
@@ -57,7 +47,7 @@ Preferences locAnnouncePrefs;
 #define TX_GPIO_NUM GPIO_NUM_14
 #define RX_GPIO_NUM GPIO_NUM_13
 
-// --- Location Announce Stuff ---
+// --- Location Announce Definitions ---
 #define LOC_ANN1_START 1
 #define LOC_ANN2_AUTOSTOP 4
 #define LOC_ANN3_COMFORT 5
